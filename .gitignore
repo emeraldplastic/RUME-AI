@@ -5,6 +5,7 @@ __pycache__/
 *.db
 uploads/
 data/
+instance/
 venv/
 .venv/
 dist/

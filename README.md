@@ -1,25 +1,59 @@
-# 🧠 RUME AI
-**AI-Powered Resume Screening Platform**
+# RUME AI
 
-RUME AI is a secure, full-stack application that uses NLP and ML to analyze, rank, and screen resumes against job requirements.
+Secure resume screening for hiring teams. RUME AI lets a user create job requirements, upload resumes, run deterministic ML/NLP scoring, and review a ranked candidate list.
 
-## ✨ Features
-- **AI Scoring**: Weighted analysis of skills, experience, and job relevance.
-- **NLP Engine**: Automatic extraction of technical/soft skills and education.
-- **Secure PII**: All candidate data (names, emails, text) is AES-encrypted at rest.
-- **Full Stack**: JWT authentication, rate limiting, and audit logging.
-- **Premium UI**: Modern dark glassmorphic dashboard with real-time stats.
+## What It Does
 
-## 🚀 Quick Start
-1. **Install**: `pip install -r requirements.txt`
-2. **Setup**: Copy `.env.example` to `.env` and generate an `ENCRYPTION_KEY`.
-3. **Run**: `python run.py`
+- User accounts with bcrypt password hashing and JWT auth in an HttpOnly cookie.
+- SQLite database with encrypted resume text, names, emails, phones, and filenames.
+- Resume upload for PDF, DOCX, and TXT files. Original files are parsed in memory and not stored.
+- Candidate ranking by weighted skill match, experience, education, and job-description similarity.
+- Dashboard, audit trail, job management, resume intake, sorted results, candidate detail modal, and masked-email CSV export.
 
-## 🛠️ Tech
-- **Backend**: Flask, SQLAlchemy, SQLite
-- **AI/NLP**: scikit-learn, NLTK
-- **Security**: Cryptography (Fernet), JWT, bcrypt
-- **Frontend**: Vanilla JS, CSS Glassmorphism
+## Security Notes
 
----
-© 2026 RUME AI
+- Set `SECRET_KEY`, `JWT_SECRET`, and `ENCRYPTION_KEY` before production use.
+- Generate `ENCRYPTION_KEY` with:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+- Production mode fails fast if required secrets are missing.
+- Candidate email is masked in API results and exports. Raw resume text is never returned by the API.
+
+## Setup
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+python run.py
+```
+
+Open `http://127.0.0.1:5000`.
+
+## Tests
+
+```bash
+venv\Scripts\python.exe -m unittest discover -s tests
+venv\Scripts\python.exe -m compileall app tests
+node --check app\static\app.js
+```
+
+## Project Structure
+
+```text
+app/
+  analyzer.py       ML scoring and skill matching
+  config.py         environment and security configuration
+  main.py           Flask app factory and security headers
+  models.py         encrypted resume database models
+  resume_parser.py  PDF, DOCX, TXT parsing
+  routes.py         auth, jobs, uploads, analysis, results API
+  security.py       encryption, JWT, sanitization, audit helpers
+  static/           browser UI
+  templates/        single-page app shell
+tests/              API and privacy regression tests
+```

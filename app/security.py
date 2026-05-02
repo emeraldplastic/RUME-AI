@@ -1,91 +1,155 @@
-import bcrypt
-import jwt
-import os
-import bleach
+"""Security utilities for encryption, auth, sanitization, and audit logs."""
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import request, jsonify, current_app
-from cryptography.fernet import Fernet
-from app.models import AuditLog
+
+import bcrypt
+import bleach
+import jwt
+from cryptography.fernet import Fernet, InvalidToken
+from flask import current_app, jsonify, request
+from werkzeug.utils import secure_filename
+
 from app.main import db
 
+
 class SecurityManager:
-    @staticmethod
-    def get_fernet():
-        key = current_app.config['ENCRYPTION_KEY']
+    _fernet = None
+    _fernet_key = None
+
+    @classmethod
+    def _key(cls):
+        key = current_app.config.get("ENCRYPTION_KEY", "")
         if not key:
-            # Fallback for development if not in env
-            print("[Security] WARNING: No ENCRYPTION_KEY found in .env. Using temporary key.")
-            key = Fernet.generate_key()
-        return Fernet(key)
+            key = current_app.config.setdefault("_DEV_ENCRYPTION_KEY", Fernet.generate_key().decode())
+            current_app.logger.warning("No ENCRYPTION_KEY configured; using a temporary development key.")
+        return key.encode() if isinstance(key, str) else key
+
+    @classmethod
+    def fernet(cls):
+        key = cls._key()
+        if cls._fernet is None or cls._fernet_key != key:
+            cls._fernet = Fernet(key)
+            cls._fernet_key = key
+        return cls._fernet
 
     @classmethod
     def encrypt(cls, text):
-        if not text: return None
-        f = cls.get_fernet()
-        return f.encrypt(text.encode()).decode()
+        if text is None:
+            return ""
+        return cls.fernet().encrypt(str(text).encode("utf-8")).decode("utf-8")
 
     @classmethod
     def decrypt(cls, token):
-        if not token: return None
-        f = cls.get_fernet()
-        try:
-            return f.decrypt(token.encode()).decode()
-        except:
-            return "[Decryption Error]"
-
-    @staticmethod
-    def hash_password(password):
-        return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-    @staticmethod
-    def check_password(password, hashed):
-        return bcrypt.checkpw(password.encode(), hashed.encode())
-
-    @staticmethod
-    def generate_token(user_id):
-        payload = {
-            'exp': datetime.utcnow() + timedelta(seconds=current_app.config['JWT_ACCESS_TOKEN_EXPIRES']),
-            'iat': datetime.utcnow(),
-            'sub': user_id
-        }
-        return jwt.encode(payload, current_app.config['JWT_SECRET'], algorithm='HS256')
-
-    @staticmethod
-    def sanitize(text):
-        if not text: return ""
-        return bleach.clean(text, tags=[], attributes={}, strip=True)
-
-def require_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        if 'Authorization' in request.headers:
-            token = request.headers['Authorization'].split(" ")[1]
-        
         if not token:
-            return jsonify({'error': 'Authentication token missing'}), 401
-            
+            return ""
         try:
-            data = jwt.decode(token, current_app.config['JWT_SECRET'], algorithms=['HS256'])
-            request.user_id = data['sub']
-        except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token expired'}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({'error': 'Invalid token'}), 401
-            
-        return f(*args, **kwargs)
-    return decorated
+            return cls.fernet().decrypt(token.encode("utf-8")).decode("utf-8")
+        except (InvalidToken, ValueError):
+            current_app.logger.warning("Encrypted field could not be decrypted.")
+            return ""
 
-def log_action(action, resource_type=None, resource_id=None, detail=None):
-    user_id = getattr(request, 'user_id', None)
-    log = AuditLog(
-        user_id=user_id,
-        action=action,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        detail=detail,
-        ip_address=request.remote_addr
+    @staticmethod
+    def hash_password(password: str) -> str:
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+
+    @staticmethod
+    def check_password(password: str, password_hash: str) -> bool:
+        if not password or not password_hash:
+            return False
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+
+    @staticmethod
+    def generate_token(user_id: int) -> str:
+        now = datetime.utcnow()
+        payload = {
+            "sub": str(user_id),
+            "iat": now,
+            "exp": now + timedelta(hours=current_app.config["JWT_EXPIRY_HOURS"]),
+        }
+        return jwt.encode(payload, current_app.config["JWT_SECRET"], algorithm="HS256")
+
+    @staticmethod
+    def decode_token(token: str) -> dict:
+        return jwt.decode(token, current_app.config["JWT_SECRET"], algorithms=["HS256"])
+
+    @staticmethod
+    def sanitize(text, max_length=10000) -> str:
+        if text is None:
+            return ""
+        clean = bleach.clean(str(text), tags=[], attributes={}, strip=True)
+        return clean[:max_length].strip()
+
+    @staticmethod
+    def safe_filename(filename: str) -> str:
+        safe = secure_filename(filename or "resume")
+        return safe[:180] or "resume"
+
+    @staticmethod
+    def mask_email(email: str) -> str:
+        if not email or "@" not in email:
+            return ""
+        user, domain = email.split("@", 1)
+        if len(user) <= 2:
+            masked_user = user[:1] + "*"
+        else:
+            masked_user = user[0] + "*" * max(2, len(user) - 2) + user[-1]
+        return f"{masked_user}@{domain}"
+
+
+def token_from_request():
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:].strip()
+    return request.cookies.get("auth_token", "")
+
+
+def require_auth(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        token = token_from_request()
+        if not token:
+            return jsonify({"error": "Authentication required"}), 401
+
+        try:
+            payload = SecurityManager.decode_token(token)
+            request.user_id = int(payload["sub"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Session expired"}), 401
+        except (jwt.InvalidTokenError, KeyError, ValueError):
+            return jsonify({"error": "Invalid session"}), 401
+
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def set_auth_cookie(response, token: str):
+    secure_cookie = current_app.config.get("FORCE_SECURE_COOKIES") or request.is_secure
+    response.set_cookie(
+        "auth_token",
+        token,
+        httponly=True,
+        secure=secure_cookie,
+        samesite="Strict",
+        max_age=current_app.config["JWT_EXPIRY_HOURS"] * 3600,
     )
-    db.session.add(log)
-    db.session.commit()
+    return response
+
+
+def clear_auth_cookie(response):
+    response.delete_cookie("auth_token", samesite="Strict")
+    return response
+
+
+def log_action(action, resource_type="", resource_id=None, detail=""):
+    from app.models import AuditLog
+
+    entry = AuditLog(
+        user_id=getattr(request, "user_id", None),
+        action=action,
+        resource_type=resource_type or "",
+        resource_id=resource_id,
+        detail=SecurityManager.sanitize(detail, 500),
+        ip_address=request.headers.get("X-Forwarded-For", request.remote_addr or "")[:45],
+    )
+    db.session.add(entry)
