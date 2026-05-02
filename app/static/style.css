@@ -1,0 +1,23 @@
+/* RUME AI \u2014 Premium Design System */
+:root {
+    --bg-0: #04060e; --bg-1: #0a0e1a; --bg-2: #111827; --bg-card: rgba(255,255,255,0.03);
+    --border: rgba(255,255,255,0.06); --text-1: #e6edf3; --text-2: #8b949e;
+    --purple: #7c3aed; --purple-l: #a78bfa; --cyan: #06b6d4;
+}
+body { background: var(--bg-0); color: var(--text-1); font-family: 'Inter', sans-serif; margin: 0; }
+.bg-mesh { position: fixed; inset: 0; background: radial-gradient(circle, rgba(124,58,237,0.05) 0%, transparent 70%); pointer-events: none; }
+.auth-wrapper { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+.auth-card { background: var(--bg-1); padding: 2rem; border-radius: 12px; border: 1px solid var(--border); width: 100%; max-width: 400px; }
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar { width: 240px; border-right: 1px solid var(--border); padding: 1rem; }
+.main-area { flex: 1; padding: 2rem; }
+.btn { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+.btn-primary { background: var(--purple); color: #fff; }
+.stat-card { background: var(--bg-card); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border); }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.view { display: none; }
+.view.active { display: block; }
+.nav-item { display: block; padding: 10px; color: var(--text-2); text-decoration: none; border-radius: 6px; margin-bottom: 5px; }
+.nav-item.active { background: rgba(124,58,237,0.1); color: var(--text-1); }
+.loading-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+.loading-overlay.active { display: flex; }

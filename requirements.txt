@@ -1,0 +1,15 @@
+flask
+flask-sqlalchemy
+flask-login
+flask-limiter
+bcrypt
+PyJWT
+bleach
+python-dotenv
+cryptography
+nltk
+scikit-learn
+pandas
+PyPDF2
+python-docx
+werkzeug
