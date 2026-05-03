@@ -1,11 +1,11 @@
 const App = {
     user: null,
-    token: "",
     jobs: [],
     currentJobId: null,
     currentJobTitle: "",
     currentFilter: "all",
     currentSort: "score",
+    currentSearch: "",
     candidates: [],
     editingJobId: null,
 
@@ -90,6 +90,12 @@ const App = {
             this.currentSort = event.target.value;
             this.loadResults();
         });
+        document.getElementById("result-search").addEventListener("input", (event) => {
+            this.currentSearch = event.target.value.trim().toLowerCase();
+            const visible = this.filteredCandidates();
+            this.renderSummaryFromCandidates(visible);
+            this.renderCandidates(visible);
+        });
         document.getElementById("filter-bar").addEventListener("click", (event) => {
             const button = event.target.closest(".filter-chip");
             if (!button) return;
@@ -100,6 +106,12 @@ const App = {
         });
         document.getElementById("btn-export").addEventListener("click", () => this.exportCsv());
         document.getElementById("candidates-list").addEventListener("click", (event) => {
+            const deleteButton = event.target.closest("[data-candidate-action='delete']");
+            if (deleteButton) {
+                event.stopPropagation();
+                this.deleteCandidate(Number(deleteButton.dataset.id));
+                return;
+            }
             const card = event.target.closest("[data-candidate-id]");
             if (card) this.showCandidate(Number(card.dataset.candidateId));
         });
@@ -114,14 +126,28 @@ const App = {
 
     async apiFetch(url, options = {}) {
         const headers = options.headers || {};
-        if (this.token) headers.Authorization = `Bearer ${this.token}`;
+        const method = (options.method || "GET").toUpperCase();
+        const csrfToken = this.readCookie("csrf_token");
+        if (csrfToken && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+            headers["X-CSRF-Token"] = csrfToken;
+        }
         if (options.body && !(options.body instanceof FormData)) headers["Content-Type"] = "application/json";
         const response = await fetch(url, { ...options, headers, credentials: "same-origin" });
         if (response.status === 401) {
-            this.token = "";
+            this.user = null;
             this.showAuth();
         }
         return response;
+    },
+
+    readCookie(name) {
+        const value = document.cookie
+            .split("; ")
+            .find((row) => row.startsWith(`${name}=`))
+            ?.split("=")
+            .slice(1)
+            .join("=") || "";
+        return decodeURIComponent(value);
     },
 
     async checkAuth() {
@@ -187,7 +213,6 @@ const App = {
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Authentication failed");
-            this.token = data.token || "";
             this.user = data.user;
             this.toast(message, "success");
             this.showApp();
@@ -199,8 +224,7 @@ const App = {
     },
 
     async logout() {
-        await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
-        this.token = "";
+        await this.apiFetch("/api/auth/logout", { method: "POST" });
         this.user = null;
         this.showAuth();
     },
@@ -463,8 +487,9 @@ const App = {
         this.currentJobTitle = data.job.title;
         this.candidates = data.candidates || [];
         document.getElementById("results-title").textContent = `Results: ${data.job.title}`;
-        this.renderSummaryFromCandidates(this.candidates);
-        this.renderCandidates(this.candidates);
+        const visible = this.filteredCandidates();
+        this.renderSummaryFromCandidates(visible);
+        this.renderCandidates(visible);
     },
 
     renderSummary(data) {
@@ -508,10 +533,43 @@ const App = {
                     <div class="score-wrap">
                         <span class="chip ${this.analysisColor(status)}">${this.escape(status.replaceAll("_", " "))}</span>
                         <span class="score status-${status}">${score}</span>
+                        <button class="icon-btn danger" data-candidate-action="delete" data-id="${candidate.id}" type="button" title="Remove candidate" aria-label="Remove candidate">
+                            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 15H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        </button>
                     </div>
                 </article>
             `;
         }).join("");
+    },
+
+    filteredCandidates() {
+        if (!this.currentSearch) return this.candidates;
+        return this.candidates.filter((candidate) => {
+            const analysis = candidate.analysis || {};
+            const haystack = [
+                candidate.candidate_name,
+                candidate.candidate_email_masked,
+                candidate.education_level,
+                candidate.extracted_skills?.join(" "),
+                analysis.status?.replaceAll("_", " "),
+                analysis.matched_skills,
+                analysis.missing_skills,
+            ].join(" ").toLowerCase();
+            return haystack.includes(this.currentSearch);
+        });
+    },
+
+    async deleteCandidate(id) {
+        if (!this.currentJobId || !window.confirm("Remove this encrypted candidate record?")) return;
+        const response = await this.apiFetch(`/api/jobs/${this.currentJobId}/candidates/${id}`, { method: "DELETE" });
+        if (response.ok) {
+            this.toast("Candidate removed", "success");
+            await this.loadResults();
+            await this.loadDashboard();
+            return;
+        }
+        const data = await response.json();
+        this.toast(data.error || "Could not remove candidate", "error");
     },
 
     showCandidate(id) {
@@ -554,12 +612,13 @@ const App = {
     },
 
     exportCsv() {
-        if (!this.candidates.length) {
+        const candidates = this.filteredCandidates();
+        if (!candidates.length) {
             this.toast("No candidates to export.", "error");
             return;
         }
         const rows = [["Rank", "Candidate", "Masked Email", "Score", "Status", "Matched Skills", "Missing Skills", "Experience", "Education"]];
-        this.candidates.forEach((candidate, index) => {
+        candidates.forEach((candidate, index) => {
             const analysis = candidate.analysis || {};
             rows.push([
                 index + 1,

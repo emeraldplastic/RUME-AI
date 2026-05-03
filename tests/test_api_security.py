@@ -20,7 +20,6 @@ class RumeApiSecurityTest(unittest.TestCase):
             {
                 "TESTING": True,
                 "RATELIMIT_ENABLED": False,
-                "WTF_CSRF_ENABLED": False,
                 "MAX_CONTENT_LENGTH": 1024 * 1024,
             }
         )
@@ -29,8 +28,9 @@ class RumeApiSecurityTest(unittest.TestCase):
             db.drop_all()
             db.create_all()
 
-    def register(self, username="owner"):
-        response = self.client.post(
+    def register(self, username="owner", client=None):
+        client = client or self.client
+        response = client.post(
             "/api/auth/register",
             json={
                 "username": username,
@@ -40,12 +40,20 @@ class RumeApiSecurityTest(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
-        return response.get_json()["token"]
+        self.assertNotIn("token", response.get_json())
+        return response
 
-    def create_job(self, token):
-        response = self.client.post(
+    def csrf_headers(self, client=None):
+        client = client or self.client
+        csrf_cookie = client.get_cookie("csrf_token")
+        self.assertIsNotNone(csrf_cookie)
+        return {"X-CSRF-Token": csrf_cookie.value}
+
+    def create_job(self, client=None):
+        client = client or self.client
+        response = client.post(
             "/api/jobs",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=self.csrf_headers(client),
             json={
                 "title": "Full Stack Engineer",
                 "description": "Build Flask React SQL systems on AWS with secure APIs.",
@@ -57,11 +65,12 @@ class RumeApiSecurityTest(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         return response.get_json()["id"]
 
-    def upload_resume(self, token, job_id, filename, text):
-        return self.client.post(
+    def upload_resume(self, job_id, filename, text, client=None, content_type="text/plain"):
+        client = client or self.client
+        return client.post(
             f"/api/jobs/{job_id}/upload",
-            headers={"Authorization": f"Bearer {token}"},
-            data={"resumes": (BytesIO(text.encode("utf-8")), filename)},
+            headers=self.csrf_headers(client),
+            data={"resumes": (BytesIO(text.encode("utf-8")), filename, content_type)},
             content_type="multipart/form-data",
         )
 
@@ -69,9 +78,37 @@ class RumeApiSecurityTest(unittest.TestCase):
         response = self.client.get("/api/jobs")
         self.assertEqual(response.status_code, 401)
 
+    def test_auth_cookie_is_httponly_and_token_is_not_exposed_to_js(self):
+        response = self.register()
+        cookies = response.headers.getlist("Set-Cookie")
+        auth_cookie = next(cookie for cookie in cookies if cookie.startswith("auth_token="))
+        csrf_cookie = next(cookie for cookie in cookies if cookie.startswith("csrf_token="))
+
+        self.assertIn("HttpOnly", auth_cookie)
+        self.assertNotIn("HttpOnly", csrf_cookie)
+        self.assertIn("SameSite=Strict", auth_cookie)
+        self.assertIn("SameSite=Strict", csrf_cookie)
+
+    def test_cookie_mutations_require_csrf_header(self):
+        self.register()
+        blocked = self.client.post(
+            "/api/jobs",
+            json={
+                "title": "Blocked",
+                "description": "This should not save without the CSRF header.",
+                "required_skills": "python",
+                "min_experience": 1,
+                "min_education": "bachelor",
+            },
+        )
+        self.assertEqual(blocked.status_code, 403)
+
+        allowed_job_id = self.create_job()
+        self.assertIsInstance(allowed_job_id, int)
+
     def test_resume_text_is_encrypted_and_results_are_sorted(self):
-        token = self.register()
-        job_id = self.create_job(token)
+        self.register()
+        job_id = self.create_job()
         strong = (
             "Jane Candidate\njane@example.com\nBachelor of Science\n"
             "5 years experience building python react sql aws platforms."
@@ -81,8 +118,8 @@ class RumeApiSecurityTest(unittest.TestCase):
             "1 year experience writing documentation and support notes."
         )
 
-        first = self.upload_resume(token, job_id, "jane.txt", strong)
-        second = self.upload_resume(token, job_id, "mark.txt", weak)
+        first = self.upload_resume(job_id, "jane.txt", strong)
+        second = self.upload_resume(job_id, "mark.txt", weak)
         self.assertEqual(first.status_code, 201, first.get_data(as_text=True))
         self.assertEqual(second.status_code, 201, second.get_data(as_text=True))
 
@@ -91,12 +128,11 @@ class RumeApiSecurityTest(unittest.TestCase):
             self.assertNotIn("Jane Candidate", encrypted.raw_text_encrypted)
             self.assertNotIn("jane@example.com", encrypted.candidate_email_encrypted)
 
-        analysis = self.client.post(f"/api/jobs/{job_id}/analyze", headers={"Authorization": f"Bearer {token}"})
+        analysis = self.client.post(f"/api/jobs/{job_id}/analyze", headers=self.csrf_headers())
         self.assertEqual(analysis.status_code, 200, analysis.get_data(as_text=True))
 
         results = self.client.get(
             f"/api/jobs/{job_id}/results?sort=score",
-            headers={"Authorization": f"Bearer {token}"},
         )
         self.assertEqual(results.status_code, 200, results.get_data(as_text=True))
         candidates = results.get_json()["candidates"]
@@ -104,12 +140,26 @@ class RumeApiSecurityTest(unittest.TestCase):
         self.assertEqual(candidates[0]["candidate_email_masked"], "j**e@example.com")
         self.assertNotIn("candidate_email", candidates[0])
 
-    def test_jobs_are_scoped_to_the_authenticated_user(self):
-        owner_token = self.register("owner")
-        intruder_token = self.register("intruder")
-        job_id = self.create_job(owner_token)
+    def test_upload_rejects_mime_extension_mismatch(self):
+        self.register()
+        job_id = self.create_job()
+        response = self.upload_resume(
+            job_id,
+            "not-a-pdf.pdf",
+            "Jane Candidate\njane@example.com\nBachelor\n5 years python sql",
+            content_type="text/plain",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["uploaded"], 0)
+        self.assertIn("file type does not match", response.get_json()["errors"][0])
 
-        response = self.client.get(f"/api/jobs/{job_id}", headers={"Authorization": f"Bearer {intruder_token}"})
+    def test_jobs_are_scoped_to_the_authenticated_user(self):
+        self.register("owner")
+        job_id = self.create_job()
+        intruder = self.app.test_client()
+        self.register("intruder", client=intruder)
+
+        response = intruder.get(f"/api/jobs/{job_id}")
         self.assertEqual(response.status_code, 404)
 
 

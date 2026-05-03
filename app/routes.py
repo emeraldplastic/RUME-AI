@@ -73,7 +73,7 @@ def register():
     db.session.commit()
 
     token = SecurityManager.generate_token(user.id)
-    response = jsonify({"user": user.to_dict(), "token": token})
+    response = jsonify({"user": user.to_dict()})
     return set_auth_cookie(response, token), 201
 
 
@@ -93,7 +93,7 @@ def login():
     db.session.commit()
 
     token = SecurityManager.generate_token(user.id)
-    response = jsonify({"user": user.to_dict(), "token": token})
+    response = jsonify({"user": user.to_dict()})
     return set_auth_cookie(response, token)
 
 
@@ -263,12 +263,20 @@ def upload_resumes(job_id):
 
     uploaded = []
     errors = []
-    files = request.files.getlist("resumes")
+    files = [file for file in request.files.getlist("resumes") if file and file.filename]
+    if not files:
+        return error("No resume files uploaded")
+    if len(files) > current_app.config["MAX_FILES_PER_UPLOAD"]:
+        return error(f"Upload up to {current_app.config['MAX_FILES_PER_UPLOAD']} resumes at a time", 413)
+
     for file in files:
         original_name = file.filename or "resume"
         safe_name = security.safe_filename(original_name)
         if not Config.allowed_file(safe_name):
             errors.append(f"{safe_name}: unsupported file type")
+            continue
+        if not Config.allowed_mime(safe_name, file.mimetype or ""):
+            errors.append(f"{safe_name}: file type does not match its extension")
             continue
 
         try:
@@ -327,11 +335,13 @@ def upload_resumes(job_id):
         db.session.rollback()
         return error("One or more resumes were duplicates", 409)
 
-    return jsonify({"uploaded": len(uploaded), "results": uploaded, "errors": errors}), 201
+    status_code = 201 if uploaded else 400
+    return jsonify({"uploaded": len(uploaded), "results": uploaded, "errors": errors}), status_code
 
 
 @api.route("/jobs/<int:job_id>/analyze", methods=["POST"])
 @require_auth
+@limiter.limit("20 per hour")
 def analyze_resumes(job_id):
     security = SecurityManager
     job = owned_job(job_id)

@@ -37,6 +37,7 @@ class Config:
 
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "uploads"))
     MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_SIZE", str(16 * 1024 * 1024)))
+    MAX_FILES_PER_UPLOAD = int(os.getenv("MAX_FILES_PER_UPLOAD", "20"))
     ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}
     ALLOWED_MIME_PREFIXES = {
         "pdf": ("application/pdf",),
@@ -87,3 +88,11 @@ class Config:
     @staticmethod
     def extension(filename: str) -> str:
         return filename.rsplit(".", 1)[1].lower() if "." in filename else ""
+
+    @staticmethod
+    def allowed_mime(filename: str, mimetype: str) -> bool:
+        ext = Config.extension(filename)
+        if not mimetype:
+            return True
+        allowed = Config.ALLOWED_MIME_PREFIXES.get(ext, ())
+        return any(mimetype == item or mimetype.startswith(f"{item};") for item in allowed)

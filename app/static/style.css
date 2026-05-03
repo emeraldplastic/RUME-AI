@@ -155,6 +155,7 @@ select option { background: var(--surface); }
     cursor: pointer;
 }
 .icon-btn:hover { color: var(--text); background: var(--surface-3); }
+.icon-btn.danger:hover { color: var(--red); background: rgba(242, 104, 104, .12); }
 
 .app-shell {
     position: relative;
@@ -329,7 +330,8 @@ h3 { margin: 0; font-size: 1rem; }
     flex-wrap: wrap;
     margin-bottom: 14px;
 }
-.results-toolbar label { width: 180px; }
+.results-toolbar label { width: min(220px, 100%); }
+.results-toolbar label:first-child { width: min(300px, 100%); }
 .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; }
 .filter-chip {
     min-height: 36px;

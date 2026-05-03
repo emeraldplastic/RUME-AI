@@ -1,7 +1,7 @@
 """Flask application factory for RUME AI."""
 from pathlib import Path
 
-from flask import Flask, render_template
+from flask import Flask, jsonify, render_template
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_sqlalchemy import SQLAlchemy
@@ -35,10 +35,11 @@ def create_app(test_config=None):
     def add_security_headers(response):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "script-src 'self'; "
+            "style-src 'self' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data:; "
+            "object-src 'none'; "
             "connect-src 'self'; "
             "base-uri 'self'; "
             "form-action 'self'; "
@@ -51,6 +52,10 @@ def create_app(test_config=None):
         if app.config.get("FORCE_SECURE_COOKIES"):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
+
+    @app.errorhandler(413)
+    def payload_too_large(_):
+        return jsonify({"error": "Upload is too large"}), 413
 
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")

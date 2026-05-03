@@ -1,4 +1,6 @@
 """Security utilities for encryption, auth, sanitization, and audit logs."""
+import hmac
+import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -63,6 +65,7 @@ class SecurityManager:
         now = datetime.utcnow()
         payload = {
             "sub": str(user_id),
+            "csrf": secrets.token_urlsafe(32),
             "iat": now,
             "exp": now + timedelta(hours=current_app.config["JWT_EXPIRY_HOURS"]),
         }
@@ -99,24 +102,42 @@ class SecurityManager:
 def token_from_request():
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
-        return auth[7:].strip()
-    return request.cookies.get("auth_token", "")
+        return auth[7:].strip(), "header"
+    return request.cookies.get("auth_token", ""), "cookie"
+
+
+def requires_csrf(source: str) -> bool:
+    return source == "cookie" and request.method not in {"GET", "HEAD", "OPTIONS"}
+
+
+def validate_csrf(payload: dict) -> bool:
+    expected = payload.get("csrf", "")
+    header_token = request.headers.get("X-CSRF-Token", "")
+    cookie_token = request.cookies.get("csrf_token", "")
+    if not expected or not header_token or not cookie_token:
+        return False
+    return hmac.compare_digest(expected, header_token) and hmac.compare_digest(expected, cookie_token)
 
 
 def require_auth(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        token = token_from_request()
+        token, source = token_from_request()
         if not token:
             return jsonify({"error": "Authentication required"}), 401
 
         try:
             payload = SecurityManager.decode_token(token)
             request.user_id = int(payload["sub"])
+            request.auth_source = source
+            request.csrf_token = payload.get("csrf", "")
         except jwt.ExpiredSignatureError:
             return jsonify({"error": "Session expired"}), 401
         except (jwt.InvalidTokenError, KeyError, ValueError):
             return jsonify({"error": "Invalid session"}), 401
+
+        if requires_csrf(source) and not validate_csrf(payload):
+            return jsonify({"error": "CSRF validation failed"}), 403
 
         return view(*args, **kwargs)
 
@@ -125,6 +146,11 @@ def require_auth(view):
 
 def set_auth_cookie(response, token: str):
     secure_cookie = current_app.config.get("FORCE_SECURE_COOKIES") or request.is_secure
+    csrf_token = ""
+    try:
+        csrf_token = SecurityManager.decode_token(token).get("csrf", "")
+    except jwt.InvalidTokenError:
+        csrf_token = ""
     response.set_cookie(
         "auth_token",
         token,
@@ -133,11 +159,21 @@ def set_auth_cookie(response, token: str):
         samesite="Strict",
         max_age=current_app.config["JWT_EXPIRY_HOURS"] * 3600,
     )
+    if csrf_token:
+        response.set_cookie(
+            "csrf_token",
+            csrf_token,
+            httponly=False,
+            secure=secure_cookie,
+            samesite="Strict",
+            max_age=current_app.config["JWT_EXPIRY_HOURS"] * 3600,
+        )
     return response
 
 
 def clear_auth_cookie(response):
     response.delete_cookie("auth_token", samesite="Strict")
+    response.delete_cookie("csrf_token", samesite="Strict")
     return response
 
 
