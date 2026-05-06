@@ -1,5 +1,6 @@
 """API routes for RUME AI."""
 import hashlib
+import json
 import re
 from datetime import datetime
 
@@ -10,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from app.analyzer import ResumeAnalyzer
 from app.config import Config
 from app.main import db, limiter
-from app.models import AnalysisResult, AuditLog, Job, Resume, User
+from app.models import AnalysisResult, AuditLog, CalibrationVersion, CandidateDecision, Job, RequestLog, Resume, User
 from app.resume_parser import ResumeParser
 from app.security import SecurityManager, clear_auth_cookie, log_action, require_auth, set_auth_cookie
 
@@ -41,8 +42,53 @@ def positive_int(value, default=0, maximum=50):
     return max(0, min(number, maximum))
 
 
-def serialize_candidates(resumes, security):
-    return [resume.to_dict(security) for resume in resumes]
+def serialize_candidates(resumes, security, blind=False):
+    return [resume.to_dict(security, blind=blind) for resume in resumes]
+
+
+def bool_arg(name, default=False):
+    value = request.args.get(name)
+    if value is None:
+        return default
+    return str(value).lower() in {"1", "true", "yes", "on"}
+
+
+def calibration_criteria(job):
+    return {
+        "title": job.title,
+        "required_skills_raw": job.required_skills or "",
+        "required_skills_normalized": ResumeAnalyzer._required_skills(job.required_skills),
+        "min_experience": job.min_experience,
+        "min_education": job.min_education,
+        "weights": ResumeAnalyzer.WEIGHTS,
+        "status_thresholds": {
+            "highly_qualified": 75,
+            "qualified": 55,
+            "partially_qualified": 35,
+        },
+    }
+
+
+def create_calibration_version(job):
+    criteria = calibration_criteria(job)
+    criteria_json = json.dumps(criteria, sort_keys=True, separators=(",", ":"))
+    criteria_hash = hashlib.sha256(criteria_json.encode("utf-8")).hexdigest()
+    latest_version = (
+        db.session.query(func.max(CalibrationVersion.version))
+        .filter_by(job_id=job.id)
+        .scalar()
+        or 0
+    )
+    calibration = CalibrationVersion(
+        job_id=job.id,
+        user_id=request.user_id,
+        version=latest_version + 1,
+        criteria_hash=criteria_hash,
+        criteria_json=criteria_json,
+    )
+    db.session.add(calibration)
+    db.session.flush()
+    return calibration
 
 
 @api.route("/auth/register", methods=["POST"])
@@ -216,8 +262,9 @@ def job_detail(job_id):
 
     if request.method == "GET":
         data = job.to_dict(security)
+        data["calibration_versions"] = [item.to_dict() for item in job.calibration_versions[:10]]
         resumes = Resume.query.filter_by(job_id=job.id).order_by(Resume.uploaded_at.desc()).all()
-        data["candidates"] = serialize_candidates(resumes, security)
+        data["candidates"] = serialize_candidates(resumes, security, blind=bool_arg("blind"))
         return jsonify(data)
 
     if request.method == "PUT":
@@ -357,6 +404,7 @@ def analyze_resumes(job_id):
         return error("Upload at least one resume before analysis")
 
     job_description = security.decrypt(job.description_encrypted)
+    calibration = create_calibration_version(job)
     result_summary = []
     for resume in resumes:
         resume_text = security.decrypt(resume.raw_text_encrypted)
@@ -386,6 +434,8 @@ def analyze_resumes(job_id):
         result.strengths = analysis["strengths"]
         result.weaknesses = analysis["weaknesses"]
         result.explanation = analysis["explanation"]
+        result.evidence_encrypted = security.encrypt(json.dumps(analysis["evidence"], separators=(",", ":")))
+        result.calibration_version_id = calibration.id
         resume.years_experience = analysis["experience"]
         resume.education_level = analysis["education"]
         resume.extracted_skills = ",".join(analysis["all_skills"])
@@ -396,6 +446,7 @@ def analyze_resumes(job_id):
                 "candidate_name": security.decrypt(resume.candidate_name_encrypted),
                 "overall_score": result.overall_score,
                 "status": result.status,
+                "calibration_version": calibration.version,
             }
         )
 
@@ -413,6 +464,7 @@ def analyze_resumes(job_id):
             "not_qualified": len(result_summary) - qualified_count,
             "average_score": round(sum(scores) / len(scores), 1) if scores else 0,
             "highest_score": round(max(scores), 1) if scores else 0,
+            "calibration_version": calibration.to_dict(),
             "candidates": result_summary,
         }
     )
@@ -430,7 +482,7 @@ def results(job_id):
     sort = request.args.get("sort", "score")
 
     resumes = Resume.query.filter_by(job_id=job.id).all()
-    candidates = [resume.to_dict(security) for resume in resumes]
+    candidates = [resume.to_dict(security, blind=bool_arg("blind")) for resume in resumes]
     if status != "all":
         candidates = [c for c in candidates if c.get("analysis") and c["analysis"]["status"] == status]
 
@@ -445,7 +497,9 @@ def results(job_id):
     }
     candidates.sort(key=sorters.get(sort, sorters["score"]), reverse=(sort == "uploaded"))
 
-    return jsonify({"job": job.to_dict(security), "candidates": candidates})
+    job_data = job.to_dict(security)
+    job_data["latest_calibration"] = job.calibration_versions[0].to_dict() if job.calibration_versions else None
+    return jsonify({"job": job_data, "candidates": candidates})
 
 
 @api.route("/jobs/<int:job_id>/candidates/<int:resume_id>", methods=["DELETE"])
@@ -463,3 +517,116 @@ def delete_candidate(job_id, resume_id):
     db.session.delete(resume)
     db.session.commit()
     return jsonify({"message": "Candidate removed"})
+
+
+@api.route("/jobs/<int:job_id>/candidates/<int:resume_id>/decision", methods=["GET", "POST"])
+@require_auth
+def candidate_decision(job_id, resume_id):
+    security = SecurityManager
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    resume = Resume.query.filter_by(id=resume_id, job_id=job.id).first()
+    if not resume:
+        return error("Candidate not found", 404)
+
+    if request.method == "GET":
+        decisions = CandidateDecision.query.filter_by(resume_id=resume.id).order_by(CandidateDecision.created_at.desc()).all()
+        return jsonify({"decisions": [decision.to_dict(security) for decision in decisions]})
+
+    data = json_body()
+    decision = SecurityManager.sanitize(data.get("decision") or "manual_review", 40)
+    allowed = {"manual_review", "advance", "hold", "reject", "needs_info"}
+    if decision not in allowed:
+        return error("Decision is invalid")
+
+    note = SecurityManager.sanitize(data.get("note"), 2000)
+    entry = CandidateDecision(
+        job_id=job.id,
+        resume_id=resume.id,
+        user_id=request.user_id,
+        decision=decision,
+        note_encrypted=security.encrypt(note),
+    )
+    db.session.add(entry)
+    log_action("candidate_decision", "resume", resume.id, f"Decision: {decision}")
+    db.session.commit()
+    return jsonify(entry.to_dict(security)), 201
+
+
+@api.route("/jobs/<int:job_id>/calibrations", methods=["GET"])
+@require_auth
+def calibrations(job_id):
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+    return jsonify({"calibrations": [calibration.to_dict() for calibration in job.calibration_versions]})
+
+
+@api.route("/jobs/<int:job_id>/audit-pack", methods=["GET"])
+@require_auth
+def audit_pack(job_id):
+    security = SecurityManager
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    resumes = Resume.query.filter_by(job_id=job.id).all()
+    candidate_data = [resume.to_dict(security, blind=bool_arg("blind")) for resume in resumes]
+    resume_ids = [resume.id for resume in resumes]
+    audit_logs = (
+        AuditLog.query.filter_by(user_id=request.user_id)
+        .filter(
+            ((AuditLog.resource_type == "job") & (AuditLog.resource_id == job.id))
+            | ((AuditLog.resource_type == "resume") & (AuditLog.resource_id.in_(resume_ids or [0])))
+        )
+        .order_by(AuditLog.timestamp.asc())
+        .all()
+    )
+    decisions = (
+        CandidateDecision.query.filter_by(job_id=job.id)
+        .order_by(CandidateDecision.created_at.asc())
+        .all()
+    )
+    pack = {
+        "generated_at": datetime.utcnow().isoformat(),
+        "generated_by_user_id": request.user_id,
+        "job": job.to_dict(security),
+        "calibration_versions": [calibration.to_dict() for calibration in job.calibration_versions],
+        "candidates": candidate_data,
+        "decision_journal": [decision.to_dict(security) for decision in decisions],
+        "audit_logs": [entry.to_dict() for entry in audit_logs],
+        "privacy_note": "Raw resume text and unmasked emails are excluded from this audit pack.",
+    }
+    log_action("export_audit_pack", "job", job.id, f"Exported audit pack for {job.title}")
+    db.session.commit()
+    return jsonify(pack)
+
+
+@api.route("/logs", methods=["GET"])
+@require_auth
+def request_logs():
+    query = RequestLog.query.filter_by(user_id=request.user_id)
+    level = request.args.get("level")
+    event = request.args.get("event")
+    request_id = request.args.get("request_id")
+    path = request.args.get("path")
+    status = request.args.get("status")
+    if level in {"debug", "info", "error"}:
+        query = query.filter_by(level=level)
+    if event:
+        query = query.filter(RequestLog.event.contains(SecurityManager.sanitize(event, 100)))
+    if request_id:
+        query = query.filter_by(request_id=SecurityManager.sanitize(request_id, 120))
+    if path:
+        query = query.filter(RequestLog.path.contains(SecurityManager.sanitize(path, 200)))
+    if status:
+        try:
+            query = query.filter_by(status_code=int(status))
+        except ValueError:
+            return error("Status must be numeric")
+
+    limit = positive_int(request.args.get("limit"), default=50, maximum=200)
+    logs = query.order_by(RequestLog.created_at.desc()).limit(limit or 50).all()
+    return jsonify({"logs": [entry.to_dict() for entry in logs]})

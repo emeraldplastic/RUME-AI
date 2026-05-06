@@ -153,10 +153,15 @@ def _ensure_sqlite_schema():
             statements.append("ALTER TABLE resume ADD COLUMN candidate_phone_encrypted TEXT")
 
     analysis_columns = columns("analysis_result")
-    if analysis_columns and "analyzed_at" not in analysis_columns:
-        statements.append("ALTER TABLE analysis_result ADD COLUMN analyzed_at DATETIME")
-        if "timestamp" in analysis_columns:
-            statements.append("UPDATE analysis_result SET analyzed_at = timestamp WHERE analyzed_at IS NULL")
+    if analysis_columns:
+        if "analyzed_at" not in analysis_columns:
+            statements.append("ALTER TABLE analysis_result ADD COLUMN analyzed_at DATETIME")
+            if "timestamp" in analysis_columns:
+                statements.append("UPDATE analysis_result SET analyzed_at = timestamp WHERE analyzed_at IS NULL")
+        if "evidence_encrypted" not in analysis_columns:
+            statements.append("ALTER TABLE analysis_result ADD COLUMN evidence_encrypted TEXT")
+        if "calibration_version_id" not in analysis_columns:
+            statements.append("ALTER TABLE analysis_result ADD COLUMN calibration_version_id INTEGER")
 
     for statement in statements:
         db.session.execute(text(statement))

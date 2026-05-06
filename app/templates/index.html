@@ -78,6 +78,7 @@
                 <button class="nav-item" data-view="job-form" type="button">New job</button>
                 <button class="nav-item" data-view="upload" type="button">Upload</button>
                 <button class="nav-item" data-view="results" type="button">Results</button>
+                <button class="nav-item" data-view="trust" type="button">Trust</button>
             </nav>
             <div class="sidebar-footer">
                 <div class="user-chip">
@@ -201,7 +202,10 @@
                         <p class="eyebrow">Ranking</p>
                         <h2 id="results-title">Results</h2>
                     </div>
-                    <button class="btn btn-secondary" id="btn-export" type="button">Export CSV</button>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" id="btn-audit-pack" type="button">Audit pack</button>
+                        <button class="btn btn-secondary" id="btn-export" type="button">Export CSV</button>
+                    </div>
                 </div>
 
                 <div class="results-toolbar">
@@ -216,6 +220,10 @@
                             <option value="name">Name</option>
                         </select>
                     </label>
+                    <label class="inline-check">
+                        <input id="blind-review-toggle" type="checkbox">
+                        Blind review
+                    </label>
                     <div class="filter-bar" id="filter-bar">
                         <button class="filter-chip active" data-filter="all" type="button">All</button>
                         <button class="filter-chip" data-filter="highly_qualified" type="button">Highly qualified</button>
@@ -227,6 +235,37 @@
 
                 <div class="result-summary" id="result-summary"></div>
                 <div class="candidates-list" id="candidates-list"></div>
+            </section>
+
+            <section class="view" id="view-trust">
+                <div class="view-header">
+                    <div>
+                        <p class="eyebrow">Governance</p>
+                        <h2>Trust center</h2>
+                    </div>
+                    <button class="btn btn-secondary" id="btn-refresh-trust" type="button">Refresh</button>
+                </div>
+
+                <div class="two-column">
+                    <section class="panel">
+                        <div class="panel-header"><h3>Calibration history</h3></div>
+                        <div class="list" id="trust-calibrations"></div>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header"><h3>Structured logs</h3></div>
+                        <div class="log-search">
+                            <input id="log-request-id" placeholder="Request ID">
+                            <select id="log-level">
+                                <option value="">All levels</option>
+                                <option value="debug">Debug</option>
+                                <option value="info">Info</option>
+                                <option value="error">Error</option>
+                            </select>
+                            <button class="btn btn-secondary" id="btn-search-logs" type="button">Search</button>
+                        </div>
+                        <div class="list" id="trust-logs"></div>
+                    </section>
+                </div>
             </section>
         </main>
     </div>

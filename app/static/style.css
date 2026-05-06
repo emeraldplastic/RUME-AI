@@ -111,6 +111,18 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .auth-form { display: none; flex-direction: column; gap: 14px; }
 .auth-form.active { display: flex; }
 label { display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: .86rem; font-weight: 700; }
+.inline-check {
+    width: auto;
+    min-height: 42px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 11px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #0d1116;
+}
+.inline-check input { width: auto; min-height: auto; }
 input, textarea, select {
     width: 100%;
     min-height: 42px;
@@ -226,6 +238,7 @@ select option { background: var(--surface); }
     gap: 16px;
     margin-bottom: 22px;
 }
+.header-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .eyebrow {
     margin: 0 0 4px;
     color: var(--teal);
@@ -415,6 +428,12 @@ h3 { margin: 0; font-size: 1rem; }
 .section-title { margin: 16px 0 8px; color: var(--muted); font-size: .78rem; text-transform: uppercase; font-weight: 900; }
 .insight-list { margin: 0; padding-left: 18px; color: var(--muted); }
 .explanation { white-space: pre-wrap; padding: 12px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: #0d1116; color: var(--muted); }
+.evidence-list, .decision-form, .log-search { display: flex; flex-direction: column; gap: 8px; }
+.evidence-item { padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: #0d1116; color: var(--muted); }
+.decision-form { margin-top: 16px; padding: 12px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: #0d1116; }
+.log-search { margin-bottom: 12px; }
+.log-row { align-items: flex-start; }
+.log-row code { color: var(--teal); font-size: .78rem; word-break: break-all; }
 
 .loading-overlay {
     position: fixed;
@@ -488,7 +507,7 @@ h3 { margin: 0; font-size: 1rem; }
 
 @media (max-width: 640px) {
     .auth-card { padding: 20px; }
-    .view-header, .results-toolbar, .form-actions { flex-direction: column; align-items: stretch; }
+    .view-header, .header-actions, .results-toolbar, .form-actions { flex-direction: column; align-items: stretch; }
     .stats-grid, .two-column, .result-summary, .score-grid { grid-template-columns: 1fr; }
     .candidate-card { grid-template-columns: 1fr; }
     .score-wrap { justify-content: space-between; }

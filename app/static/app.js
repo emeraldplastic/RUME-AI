@@ -6,6 +6,7 @@ const App = {
     currentFilter: "all",
     currentSort: "score",
     currentSearch: "",
+    blindReview: false,
     candidates: [],
     editingJobId: null,
 
@@ -16,6 +17,7 @@ const App = {
         this.bindUpload();
         this.bindResults();
         this.bindModal();
+        this.bindTrust();
         this.checkAuth();
     },
 
@@ -105,6 +107,11 @@ const App = {
             this.loadResults();
         });
         document.getElementById("btn-export").addEventListener("click", () => this.exportCsv());
+        document.getElementById("btn-audit-pack").addEventListener("click", () => this.exportAuditPack());
+        document.getElementById("blind-review-toggle").addEventListener("change", (event) => {
+            this.blindReview = event.target.checked;
+            this.loadResults();
+        });
         document.getElementById("candidates-list").addEventListener("click", (event) => {
             const deleteButton = event.target.closest("[data-candidate-action='delete']");
             if (deleteButton) {
@@ -122,6 +129,14 @@ const App = {
         document.getElementById("modal-overlay").addEventListener("click", (event) => {
             if (event.target.id === "modal-overlay") this.closeModal();
         });
+        document.getElementById("modal-body").addEventListener("submit", (event) => {
+            if (event.target.id === "decision-form") this.submitDecision(event);
+        });
+    },
+
+    bindTrust() {
+        document.getElementById("btn-refresh-trust").addEventListener("click", () => this.loadTrust());
+        document.getElementById("btn-search-logs").addEventListener("click", () => this.loadLogs());
     },
 
     async apiFetch(url, options = {}) {
@@ -237,6 +252,7 @@ const App = {
         if (view === "jobs") this.loadJobs();
         if (view === "upload") this.prepareUpload();
         if (view === "results") this.loadResults();
+        if (view === "trust") this.loadTrust();
     },
 
     async loadDashboard() {
@@ -480,7 +496,12 @@ const App = {
             list.innerHTML = `<div class="empty">Open a job, upload resumes, and run analysis.</div>`;
             return;
         }
-        const params = new URLSearchParams({ sort: this.currentSort, status: this.currentFilter });
+        document.getElementById("blind-review-toggle").checked = this.blindReview;
+        const params = new URLSearchParams({
+            sort: this.currentSort,
+            status: this.currentFilter,
+            blind: this.blindReview ? "1" : "0",
+        });
         const response = await this.apiFetch(`/api/jobs/${this.currentJobId}/results?${params.toString()}`);
         if (!response.ok) return;
         const data = await response.json();
@@ -528,6 +549,7 @@ const App = {
                             <span>${this.escape(candidate.candidate_email_masked || "No email")}</span>
                             <span>${candidate.years_experience || 0} yrs</span>
                             <span>${this.escape(candidate.education_level || "not specified")}</span>
+                            ${candidate.latest_decision ? `<span>${this.escape(candidate.latest_decision.decision.replaceAll("_", " "))}</span>` : ""}
                         </div>
                     </div>
                     <div class="score-wrap">
@@ -581,6 +603,7 @@ const App = {
         const missing = this.splitList(analysis.missing_skills);
         const strengths = this.splitList(analysis.strengths, "|");
         const weaknesses = this.splitList(analysis.weaknesses, "|");
+        const latestDecision = candidate.latest_decision;
         document.getElementById("modal-body").innerHTML = `
             <div class="score-grid">
                 ${this.scoreTile("Overall", analysis.overall_score)}
@@ -597,10 +620,84 @@ const App = {
             <ul class="insight-list">${strengths.map((s) => `<li>${this.escape(s)}</li>`).join("")}</ul>
             <div class="section-title">Areas to review</div>
             <ul class="insight-list">${weaknesses.map((s) => `<li>${this.escape(s)}</li>`).join("")}</ul>
+            <div class="section-title">Evidence</div>
+            ${this.renderEvidence(analysis.evidence || {})}
             <div class="section-title">Assessment</div>
             <div class="explanation">${this.escape(analysis.explanation || "")}</div>
+            <form class="decision-form" id="decision-form" data-resume-id="${candidate.id}">
+                <div class="section-title">Decision journal</div>
+                <label>Decision
+                    <select id="decision-select">
+                        <option value="manual_review">Manual review</option>
+                        <option value="advance">Advance</option>
+                        <option value="hold">Hold</option>
+                        <option value="reject">Reject</option>
+                        <option value="needs_info">Needs info</option>
+                    </select>
+                </label>
+                <label>Reviewer note
+                    <textarea id="decision-note" rows="3" placeholder="Add an evidence-backed note">${this.escape(latestDecision?.note || "")}</textarea>
+                </label>
+                ${latestDecision ? `<div class="meta">Latest: ${this.escape(latestDecision.decision.replaceAll("_", " "))} - ${this.formatDate(latestDecision.updated_at)}</div>` : ""}
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit">Save decision</button>
+                </div>
+            </form>
         `;
+        if (latestDecision) document.getElementById("decision-select").value = latestDecision.decision;
         document.getElementById("modal-overlay").hidden = false;
+    },
+
+    renderEvidence(evidence) {
+        const matched = evidence.matched_skills || {};
+        const skillRows = Object.entries(matched).flatMap(([skill, rows]) => (
+            (rows || []).map((row) => `
+                <div class="evidence-item">
+                    <strong>${this.escape(skill)}</strong>
+                    <div>${this.escape(row.snippet || "")}</div>
+                    <div class="meta">Line ${row.line || "?"} - matched ${this.escape(row.term || skill)}</div>
+                </div>
+            `)
+        ));
+        const experienceRows = (evidence.experience?.evidence || []).map((row) => `
+            <div class="evidence-item">
+                <strong>Experience</strong>
+                <div>${this.escape(row.snippet || "")}</div>
+                <div class="meta">Line ${row.line || "?"}</div>
+            </div>
+        `);
+        const educationRows = (evidence.education?.evidence || []).map((row) => `
+            <div class="evidence-item">
+                <strong>Education</strong>
+                <div>${this.escape(row.snippet || "")}</div>
+                <div class="meta">Line ${row.line || "?"}</div>
+            </div>
+        `);
+        const rows = [...skillRows, ...experienceRows, ...educationRows];
+        return rows.length ? `<div class="evidence-list">${rows.join("")}</div>` : `<div class="empty">No evidence snippets captured.</div>`;
+    },
+
+    async submitDecision(event) {
+        event.preventDefault();
+        const resumeId = Number(event.target.dataset.resumeId);
+        if (!this.currentJobId || !resumeId) return;
+        const payload = {
+            decision: document.getElementById("decision-select").value,
+            note: document.getElementById("decision-note").value.trim(),
+        };
+        try {
+            const response = await this.apiFetch(`/api/jobs/${this.currentJobId}/candidates/${resumeId}/decision`, {
+                method: "POST",
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Could not save decision");
+            this.toast("Decision saved", "success");
+            await this.loadResults();
+            this.closeModal();
+        } catch (error) {
+            this.toast(error.message, "error");
+        }
     },
 
     closeModal() {
@@ -641,6 +738,77 @@ const App = {
         link.click();
         URL.revokeObjectURL(url);
         this.toast("CSV exported", "success");
+    },
+
+    async exportAuditPack() {
+        if (!this.currentJobId) {
+            this.toast("Open a job before exporting an audit pack.", "error");
+            return;
+        }
+        try {
+            const response = await this.apiFetch(`/api/jobs/${this.currentJobId}/audit-pack`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Could not export audit pack");
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `rume-ai-audit-${(this.currentJobTitle || "job").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+            this.toast("Audit pack exported", "success");
+        } catch (error) {
+            this.toast(error.message, "error");
+        }
+    },
+
+    async loadTrust() {
+        await Promise.all([this.loadCalibrations(), this.loadLogs()]);
+    },
+
+    async loadCalibrations() {
+        const target = document.getElementById("trust-calibrations");
+        if (!this.currentJobId) {
+            target.innerHTML = `<div class="empty">Open a job to see calibration history.</div>`;
+            return;
+        }
+        const response = await this.apiFetch(`/api/jobs/${this.currentJobId}/calibrations`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const calibrations = data.calibrations || [];
+        target.innerHTML = calibrations.length ? calibrations.map((item) => `
+            <div class="list-row">
+                <div>
+                    <strong>Version ${item.version}</strong>
+                    <div class="meta">${this.escape((item.criteria.required_skills_normalized || []).join(", "))}</div>
+                    <code>${this.escape(item.criteria_hash.slice(0, 12))}</code>
+                </div>
+                <span class="meta">${this.formatDate(item.created_at)}</span>
+            </div>
+        `).join("") : `<div class="empty">No analysis calibration has been created yet.</div>`;
+    },
+
+    async loadLogs() {
+        const target = document.getElementById("trust-logs");
+        const params = new URLSearchParams({ limit: "40" });
+        const requestId = document.getElementById("log-request-id").value.trim();
+        const level = document.getElementById("log-level").value;
+        if (requestId) params.set("request_id", requestId);
+        if (level) params.set("level", level);
+        const response = await this.apiFetch(`/api/logs?${params.toString()}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const logs = data.logs || [];
+        target.innerHTML = logs.length ? logs.map((item) => `
+            <div class="list-row log-row">
+                <div>
+                    <strong>${this.escape(item.event)}</strong>
+                    <div class="meta">${this.escape(item.method || "")} ${this.escape(item.path || "")} - ${item.status_code || ""} - ${item.duration_ms || 0}ms</div>
+                    <code>${this.escape(item.request_id)}</code>
+                </div>
+                <span class="chip ${item.level === "error" ? "red" : item.level === "debug" ? "amber" : "blue"}">${this.escape(item.level)}</span>
+            </div>
+        `).join("") : `<div class="empty">No structured logs matched.</div>`;
     },
 
     showLoading(text) {

@@ -1,4 +1,5 @@
 """Database models for RUME AI."""
+import json
 from datetime import datetime
 
 from app.main import db
@@ -41,6 +42,12 @@ class Job(db.Model):
 
     owner = db.relationship("User", back_populates="jobs")
     resumes = db.relationship("Resume", back_populates="job", cascade="all, delete-orphan")
+    calibration_versions = db.relationship(
+        "CalibrationVersion",
+        back_populates="job",
+        cascade="all, delete-orphan",
+        order_by="CalibrationVersion.version.desc()",
+    )
 
     __table_args__ = (
         db.Index("rume_idx_job_user_status", "user_id", "status"),
@@ -65,6 +72,39 @@ class Job(db.Model):
         }
 
 
+class CalibrationVersion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey("job.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    version = db.Column(db.Integer, nullable=False)
+    criteria_hash = db.Column(db.String(64), nullable=False, index=True)
+    criteria_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    job = db.relationship("Job", back_populates="calibration_versions")
+
+    __table_args__ = (
+        db.UniqueConstraint("job_id", "version", name="uq_calibration_job_version"),
+        db.Index("rume_idx_calibration_job_time", "job_id", "created_at"),
+    )
+
+    def criteria(self):
+        try:
+            return json.loads(self.criteria_json or "{}")
+        except json.JSONDecodeError:
+            return {}
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "job_id": self.job_id,
+            "version": self.version,
+            "criteria_hash": self.criteria_hash,
+            "criteria": self.criteria(),
+            "created_at": self.created_at.isoformat(),
+        }
+
+
 class Resume(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.Integer, db.ForeignKey("job.id"), nullable=False, index=True)
@@ -82,13 +122,19 @@ class Resume(db.Model):
 
     job = db.relationship("Job", back_populates="resumes")
     analysis = db.relationship("AnalysisResult", back_populates="resume", uselist=False, cascade="all, delete-orphan")
+    decisions = db.relationship(
+        "CandidateDecision",
+        back_populates="resume",
+        cascade="all, delete-orphan",
+        order_by="CandidateDecision.created_at.desc()",
+    )
 
     __table_args__ = (
         db.UniqueConstraint("job_id", "file_sha256", name="uq_resume_job_file"),
         db.Index("rume_idx_resume_job_uploaded", "job_id", "uploaded_at"),
     )
 
-    def to_dict(self, security=None):
+    def to_dict(self, security=None, blind=False):
         filename = ""
         name = ""
         email = ""
@@ -97,17 +143,20 @@ class Resume(db.Model):
             name = security.decrypt(self.candidate_name_encrypted) or ""
             email = security.decrypt(self.candidate_email_encrypted) or ""
         skills = [s for s in (self.extracted_skills or "").split(",") if s]
+        latest_decision = self.decisions[0].to_dict(security) if self.decisions else None
         return {
             "id": self.id,
             "job_id": self.job_id,
-            "filename": filename,
-            "candidate_name": name or "Unknown candidate",
-            "candidate_email_masked": security.mask_email(email) if security else "",
+            "filename": "Hidden in blind review" if blind else filename,
+            "candidate_name": f"Candidate {self.id}" if blind else name or "Unknown candidate",
+            "candidate_email_masked": "" if blind else security.mask_email(email) if security else "",
+            "blind_review": blind,
             "extracted_skills": skills,
             "years_experience": self.years_experience,
             "education_level": self.education_level,
             "uploaded_at": self.uploaded_at.isoformat(),
-            "analysis": self.analysis.to_dict() if self.analysis else None,
+            "analysis": self.analysis.to_dict(security) if self.analysis else None,
+            "latest_decision": latest_decision,
         }
 
 
@@ -125,14 +174,26 @@ class AnalysisResult(db.Model):
     strengths = db.Column(db.Text, default="")
     weaknesses = db.Column(db.Text, default="")
     explanation = db.Column(db.Text, default="")
+    evidence_encrypted = db.Column(db.Text, default="")
+    calibration_version_id = db.Column(db.Integer, db.ForeignKey("calibration_version.id"), nullable=True, index=True)
     analyzed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     resume = db.relationship("Resume", back_populates="analysis")
+    calibration_version = db.relationship("CalibrationVersion")
 
-    def to_dict(self):
+    def evidence(self, security=None):
+        if not security or not self.evidence_encrypted:
+            return {}
+        try:
+            return json.loads(security.decrypt(self.evidence_encrypted) or "{}")
+        except json.JSONDecodeError:
+            return {}
+
+    def to_dict(self, security=None):
         return {
             "id": self.id,
             "resume_id": self.resume_id,
+            "calibration_version_id": self.calibration_version_id,
             "overall_score": round(self.overall_score, 1),
             "skill_score": round(self.skill_score, 1),
             "experience_score": round(self.experience_score, 1),
@@ -144,7 +205,36 @@ class AnalysisResult(db.Model):
             "strengths": self.strengths or "",
             "weaknesses": self.weaknesses or "",
             "explanation": self.explanation or "",
+            "evidence": self.evidence(security),
             "analyzed_at": self.analyzed_at.isoformat(),
+        }
+
+
+class CandidateDecision(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey("job.id"), nullable=False, index=True)
+    resume_id = db.Column(db.Integer, db.ForeignKey("resume.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    decision = db.Column(db.String(40), default="manual_review", nullable=False, index=True)
+    note_encrypted = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    resume = db.relationship("Resume", back_populates="decisions")
+
+    __table_args__ = (db.Index("rume_idx_decision_resume_time", "resume_id", "created_at"),)
+
+    def to_dict(self, security=None):
+        note = security.decrypt(self.note_encrypted) if security and self.note_encrypted else ""
+        return {
+            "id": self.id,
+            "job_id": self.job_id,
+            "resume_id": self.resume_id,
+            "user_id": self.user_id,
+            "decision": self.decision,
+            "note": note,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
 
 
@@ -170,4 +260,44 @@ class AuditLog(db.Model):
             "resource_id": self.resource_id,
             "detail": self.detail,
             "timestamp": self.timestamp.isoformat(),
+        }
+
+
+class RequestLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.String(120), nullable=False, index=True)
+    user_id = db.Column(db.Integer, nullable=True, index=True)
+    level = db.Column(db.String(20), nullable=False, index=True)
+    event = db.Column(db.String(100), nullable=False, index=True)
+    method = db.Column(db.String(12), default="")
+    path = db.Column(db.String(300), default="", index=True)
+    status_code = db.Column(db.Integer, nullable=True, index=True)
+    duration_ms = db.Column(db.Float, nullable=True)
+    payload_json = db.Column(db.Text, default="{}")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("rume_idx_request_log_user_time", "user_id", "created_at"),
+        db.Index("rume_idx_request_log_request_event", "request_id", "event"),
+    )
+
+    def payload(self):
+        try:
+            return json.loads(self.payload_json or "{}")
+        except json.JSONDecodeError:
+            return {}
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "request_id": self.request_id,
+            "user_id": self.user_id,
+            "level": self.level,
+            "event": self.event,
+            "method": self.method,
+            "path": self.path,
+            "status_code": self.status_code,
+            "duration_ms": self.duration_ms,
+            "payload": self.payload(),
+            "created_at": self.created_at.isoformat(),
         }

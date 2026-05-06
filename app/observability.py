@@ -90,6 +90,7 @@ def complete_request(response):
         duration_ms=duration_ms,
         response_bytes=response.calculate_content_length(),
     )
+    persist_request_events()
     return response
 
 
@@ -120,8 +121,53 @@ def log_event(level, event, message=None, **fields):
                 "vercel_id": request.headers.get("X-Vercel-ID", ""),
             }
         )
+        events = getattr(g, "structured_log_events", None)
+        if events is None:
+            events = []
+            g.structured_log_events = events
+        events.append({"level": level_name, **payload})
 
     logger.log(log_level, message or event, extra={"structured": payload})
+
+
+def persist_request_events():
+    if not has_app_context() or not has_request_context():
+        return
+    if not current_app.config.get("STRUCTURED_LOG_STORAGE_ENABLED", True):
+        return
+
+    events = getattr(g, "structured_log_events", [])
+    if not events:
+        return
+
+    db = None
+    try:
+        from app.main import db
+        from app.models import RequestLog
+
+        for event in events:
+            payload = _json_safe(event)
+            db.session.add(
+                RequestLog(
+                    request_id=payload.get("request_id", ""),
+                    user_id=payload.get("user_id"),
+                    level=payload.get("level", "info"),
+                    event=payload.get("event", ""),
+                    method=payload.get("method", ""),
+                    path=payload.get("path", request.path),
+                    status_code=payload.get("status_code"),
+                    duration_ms=payload.get("duration_ms"),
+                    payload_json=json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
+                )
+            )
+        db.session.commit()
+        g.structured_log_events = []
+    except Exception:
+        if db is not None:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
 
 def _client_ip():

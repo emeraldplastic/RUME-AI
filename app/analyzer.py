@@ -141,7 +141,7 @@ class ResumeAnalyzer:
     def _required_skills(cls, required_skills_str: str) -> list[str]:
         skills = set()
         for item in re.split(r"[,;\n\r|]+", required_skills_str or ""):
-            item = item.strip(" \t-*•")
+            item = item.strip(" \t-*")
             if not item:
                 continue
 
@@ -154,6 +154,57 @@ class ResumeAnalyzer:
             if normalized:
                 skills.add(normalized)
         return sorted(skills)
+
+    @classmethod
+    def evidence_for_skill(cls, text: str, skill: str) -> list[dict]:
+        clean_skill = cls.normalize_skill(skill)
+        aliases = [alias for alias, canonical in cls.SKILL_ALIASES.items() if canonical == clean_skill]
+        terms = sorted({clean_skill, *aliases}, key=len, reverse=True)
+        evidence = []
+        for index, line in enumerate(text.splitlines(), start=1):
+            clean_line = cls.clean_text(line)
+            if not clean_line:
+                continue
+            matched_term = next((term for term in terms if cls._contains_phrase(clean_line, term)), "")
+            if matched_term:
+                snippet = " ".join(line.strip().split())[:240]
+                evidence.append({"line": index, "term": matched_term, "snippet": snippet})
+            if len(evidence) >= 3:
+                break
+        return evidence
+
+    @classmethod
+    def evidence_summary(cls, resume_text: str, matched: list[str], missing: list[str], exp_years: float, education: str):
+        skill_evidence = {skill: cls.evidence_for_skill(resume_text, skill) for skill in matched}
+        experience_evidence = []
+        experience_patterns = (
+            r"\b\d+(?:\.\d+)?\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:experience|exp)\b",
+            r"\b(?:experience|exp)\s*[:\-]?\s*\d+(?:\.\d+)?\+?\s*(?:years?|yrs?)\b",
+            r"\b(?:19\d{2}|20\d{2})\s*(?:-|to|until|through)\s*(?:19\d{2}|20\d{2}|present|current|now)\b",
+        )
+        for index, line in enumerate(resume_text.splitlines(), start=1):
+            clean_line = line.strip()
+            if not clean_line:
+                continue
+            if any(re.search(pattern, clean_line.lower()) for pattern in experience_patterns):
+                experience_evidence.append({"line": index, "snippet": " ".join(clean_line.split())[:240]})
+            if len(experience_evidence) >= 3:
+                break
+
+        education_evidence = []
+        if education != "not specified":
+            for index, line in enumerate(resume_text.splitlines(), start=1):
+                if cls._contains_phrase(cls.clean_text(line), education):
+                    education_evidence.append({"line": index, "snippet": " ".join(line.strip().split())[:240]})
+                    break
+
+        return {
+            "matched_skills": skill_evidence,
+            "missing_skills": missing,
+            "experience": {"years": exp_years, "evidence": experience_evidence},
+            "education": {"level": education, "evidence": education_evidence},
+            "review_note": "Evidence is extracted from resume text and should be confirmed by a human reviewer.",
+        }
 
     @classmethod
     def analyze(cls, resume_text, job_description, required_skills_str="", min_exp=0, min_edu="bachelor"):
@@ -231,6 +282,7 @@ class ResumeAnalyzer:
             f"{len(required_skills)} required skills, showed {exp_years:g} years of experience, "
             f"and has education classified as {education}."
         )
+        evidence = cls.evidence_summary(resume_text, matched, missing, exp_years, education)
 
         return {
             "overall_score": overall,
@@ -246,5 +298,7 @@ class ResumeAnalyzer:
             "experience": exp_years,
             "education": education,
             "all_skills": sorted(resume_skills),
+            "required_skills": required_skills,
+            "evidence": evidence,
             "explanation": explanation,
         }
