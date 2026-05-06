@@ -23,6 +23,9 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 - Session tokens are not exposed to browser JavaScript; authenticated writes require a CSRF header.
 - Candidate email is masked in API results and exports. Raw resume text is never returned by the API.
 - Use `FORCE_SECURE_COOKIES=1` behind HTTPS in production.
+- Structured JSON logs are emitted to stdout with `timestamp`, `level`, `event`, `request_id`, `user_id`, route data, status, and duration. On Vercel, search them in Runtime Logs or with `vercel logs https://rume-ai.vercel.app --json`.
+- Use `LOG_LEVEL=DEBUG` during local development and `LOG_LEVEL=INFO` for normal operations. Runtime failures are logged at `error`.
+- Rate limit responses include `X-RateLimit-*` headers, a `request_id`, and retry metadata when available.
 
 ## Setup
 

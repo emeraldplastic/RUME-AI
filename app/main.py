@@ -5,11 +5,14 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template
 from flask_limiter import Limiter
+from flask_limiter.errors import RateLimitExceeded
 from flask_limiter.util import get_remote_address
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
+from werkzeug.exceptions import HTTPException
 
 from app.config import Config
+from app.observability import begin_request, complete_request, configure_logging, log_event, request_id_from_context
 
 db = SQLAlchemy()
 limiter = Limiter(key_func=get_remote_address)
@@ -27,6 +30,7 @@ def create_app(test_config=None):
             if key in test_config:
                 app.config[f"{key}_CONFIGURED"] = bool(test_config[key])
 
+    configure_logging(app)
     Config.validate(app.config)
 
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
@@ -38,6 +42,10 @@ def create_app(test_config=None):
     from app.routes import api
 
     app.register_blueprint(api)
+
+    @app.before_request
+    def start_structured_request_log():
+        begin_request()
 
     @app.after_request
     def add_security_headers(response):
@@ -61,9 +69,54 @@ def create_app(test_config=None):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
+    @app.after_request
+    def finish_structured_request_log(response):
+        return complete_request(response)
+
     @app.errorhandler(413)
     def payload_too_large(_):
-        return jsonify({"error": "Upload is too large"}), 413
+        log_event("info", "upload.too_large", max_bytes=app.config.get("MAX_CONTENT_LENGTH"))
+        return jsonify({"error": "Upload is too large", "request_id": request_id_from_context()}), 413
+
+    @app.errorhandler(RateLimitExceeded)
+    def rate_limit_exceeded(exc):
+        retry_after = getattr(exc, "retry_after", None)
+        limit = getattr(exc, "limit", None)
+        log_event(
+            "info",
+            "rate_limit.exceeded",
+            limit=str(limit or ""),
+            retry_after_seconds=retry_after,
+        )
+        response = jsonify(
+            {
+                "error": "Rate limit exceeded",
+                "request_id": request_id_from_context(),
+                "retry_after_seconds": retry_after,
+            }
+        )
+        response.status_code = 429
+        if retry_after is not None:
+            response.headers["Retry-After"] = str(retry_after)
+        return response
+
+    @app.errorhandler(Exception)
+    def unhandled_exception(exc):
+        if isinstance(exc, HTTPException):
+            return exc
+
+        log_event("error", "request.exception", error_type=type(exc).__name__, message=str(exc))
+        app.logger.exception(
+            "Unhandled request exception",
+            extra={
+                "structured": {
+                    "event": "request.exception.stack",
+                    "request_id": request_id_from_context(),
+                    "error_type": type(exc).__name__,
+                }
+            },
+        )
+        return jsonify({"error": "Internal server error", "request_id": request_id_from_context()}), 500
 
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")

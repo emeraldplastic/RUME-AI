@@ -66,7 +66,9 @@ class Config:
     JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
     FORCE_SECURE_COOKIES = os.getenv("FORCE_SECURE_COOKIES", "0") == "1"
     RATELIMIT_DEFAULT = os.getenv("RATELIMIT_DEFAULT", "200 per hour")
+    RATELIMIT_HEADERS_ENABLED = os.getenv("RATELIMIT_HEADERS_ENABLED", "1") == "1"
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
+    LOG_LEVEL = os.getenv("LOG_LEVEL") or ("DEBUG" if ENV == "development" else "INFO")
 
     @classmethod
     def validate(cls, values=None) -> None:

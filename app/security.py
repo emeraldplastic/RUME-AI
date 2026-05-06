@@ -12,6 +12,7 @@ from flask import current_app, jsonify, request
 from werkzeug.utils import secure_filename
 
 from app.main import db
+from app.observability import log_event, request_id_from_context
 
 
 class SecurityManager:
@@ -23,7 +24,7 @@ class SecurityManager:
         key = current_app.config.get("ENCRYPTION_KEY", "")
         if not key:
             key = current_app.config.setdefault("_DEV_ENCRYPTION_KEY", Fernet.generate_key().decode())
-            current_app.logger.warning("No ENCRYPTION_KEY configured; using a temporary development key.")
+            log_event("debug", "security.dev_encryption_key", message="Using temporary development encryption key")
         return key.encode() if isinstance(key, str) else key
 
     @classmethod
@@ -47,7 +48,7 @@ class SecurityManager:
         try:
             return cls.fernet().decrypt(token.encode("utf-8")).decode("utf-8")
         except (InvalidToken, ValueError):
-            current_app.logger.warning("Encrypted field could not be decrypted.")
+            log_event("error", "security.decrypt_failed", message="Encrypted field could not be decrypted")
             return ""
 
     @staticmethod
@@ -124,7 +125,7 @@ def require_auth(view):
     def wrapped(*args, **kwargs):
         token, source = token_from_request()
         if not token:
-            return jsonify({"error": "Authentication required"}), 401
+            return jsonify({"error": "Authentication required", "request_id": request_id_from_context()}), 401
 
         try:
             payload = SecurityManager.decode_token(token)
@@ -132,12 +133,12 @@ def require_auth(view):
             request.auth_source = source
             request.csrf_token = payload.get("csrf", "")
         except jwt.ExpiredSignatureError:
-            return jsonify({"error": "Session expired"}), 401
+            return jsonify({"error": "Session expired", "request_id": request_id_from_context()}), 401
         except (jwt.InvalidTokenError, KeyError, ValueError):
-            return jsonify({"error": "Invalid session"}), 401
+            return jsonify({"error": "Invalid session", "request_id": request_id_from_context()}), 401
 
         if requires_csrf(source) and not validate_csrf(payload):
-            return jsonify({"error": "CSRF validation failed"}), 403
+            return jsonify({"error": "CSRF validation failed", "request_id": request_id_from_context()}), 403
 
         return view(*args, **kwargs)
 
@@ -180,12 +181,21 @@ def clear_auth_cookie(response):
 def log_action(action, resource_type="", resource_id=None, detail=""):
     from app.models import AuditLog
 
+    sanitized_detail = SecurityManager.sanitize(detail, 500)
     entry = AuditLog(
         user_id=getattr(request, "user_id", None),
         action=action,
         resource_type=resource_type or "",
         resource_id=resource_id,
-        detail=SecurityManager.sanitize(detail, 500),
+        detail=sanitized_detail,
         ip_address=request.headers.get("X-Forwarded-For", request.remote_addr or "")[:45],
     )
     db.session.add(entry)
+    log_event(
+        "info",
+        "audit.action",
+        action=action,
+        resource_type=resource_type or "",
+        resource_id=resource_id,
+        audit_detail=sanitized_detail,
+    )

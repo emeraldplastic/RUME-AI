@@ -25,6 +25,7 @@ class RumeApiSecurityTest(unittest.TestCase):
                 "SECRET_KEY": os.environ["SECRET_KEY"],
                 "JWT_SECRET": os.environ["JWT_SECRET"],
                 "ENCRYPTION_KEY": os.environ["ENCRYPTION_KEY"],
+                "LOG_LEVEL": "ERROR",
             }
         )
         self.client = self.app.test_client()

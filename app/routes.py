@@ -3,7 +3,7 @@ import hashlib
 import re
 from datetime import datetime
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
@@ -22,7 +22,11 @@ def json_body():
 
 
 def error(message, status=400):
-    return jsonify({"error": message}), status
+    payload = {"error": message}
+    request_id = getattr(g, "request_id", None)
+    if request_id:
+        payload["request_id"] = request_id
+    return jsonify(payload), status
 
 
 def owned_job(job_id):
