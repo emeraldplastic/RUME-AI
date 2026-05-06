@@ -1,4 +1,6 @@
 """Flask application factory for RUME AI."""
+import os
+import tempfile
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template
@@ -14,7 +16,10 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 def create_app(test_config=None):
-    app = Flask(__name__, static_folder="static", template_folder="templates")
+    flask_kwargs = {"static_folder": "static", "template_folder": "templates"}
+    if os.getenv("VERCEL"):
+        flask_kwargs["instance_path"] = str(Path(tempfile.gettempdir()) / "rume_instance")
+    app = Flask(__name__, **flask_kwargs)
     app.config.from_object(Config)
     if test_config:
         app.config.update(test_config)

@@ -1,6 +1,7 @@
 """Application configuration for RUME AI."""
 import os
 import secrets
+import tempfile
 from pathlib import Path
 
 from cryptography.fernet import Fernet
@@ -15,6 +16,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 def database_url() -> str:
     raw = os.getenv("DATABASE_URL")
     if not raw:
+        if os.getenv("VERCEL"):
+            return f"sqlite:///{(Path(tempfile.gettempdir()) / 'rume_ai.db').as_posix()}"
         return f"sqlite:///{(BASE_DIR / 'instance' / 'rume_ai.db').as_posix()}"
     if raw.startswith("sqlite:///"):
         db_path = raw.removeprefix("sqlite:///")
@@ -44,7 +47,9 @@ class Config:
     SQLALCHEMY_DATABASE_URI = database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "uploads"))
+    UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER") or (
+        str(Path(tempfile.gettempdir()) / "rume_uploads") if os.getenv("VERCEL") else str(BASE_DIR / "uploads")
+    )
     MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_SIZE", str(16 * 1024 * 1024)))
     MAX_FILES_PER_UPLOAD = int(os.getenv("MAX_FILES_PER_UPLOAD", "20"))
     ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}

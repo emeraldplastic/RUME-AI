@@ -17,3 +17,5 @@ nltk_data/
 .DS_Store
 Thumbs.db
 *.bak
+
+.vercel
