@@ -25,6 +25,32 @@ class ResumeAnalyzer:
         "time management", "adaptability", "creativity", "mentoring", "project management",
         "stakeholder management", "collaboration", "presentation", "attention to detail",
     }
+    SKILL_ALIASES = {
+        "js": "javascript",
+        "node": "node.js",
+        "node js": "node.js",
+        "nodejs": "node.js",
+        "react js": "react",
+        "react.js": "react",
+        "reactjs": "react",
+        "next js": "next.js",
+        "nextjs": "next.js",
+        "vue js": "vue",
+        "vue.js": "vue",
+        "vuejs": "vue",
+        "ts": "typescript",
+        "postgres": "postgresql",
+        "postgre sql": "postgresql",
+        "mongo": "mongodb",
+        "k8s": "kubernetes",
+        "gh actions": "github actions",
+        "cicd": "ci/cd",
+        "ci cd": "ci/cd",
+        "restful api": "rest api",
+        "sklearn": "scikit-learn",
+        "scikit learn": "scikit-learn",
+        "ml": "machine learning",
+    }
     EDUCATION_HIERARCHY = {
         "not specified": 0,
         "high school": 1,
@@ -46,14 +72,35 @@ class ResumeAnalyzer:
         text = re.sub(r"[^a-z0-9+#./\s-]", " ", text)
         return " ".join(text.split())
 
+    @staticmethod
+    def _contains_phrase(text: str, phrase: str) -> bool:
+        pattern = rf"(?<![a-z0-9+#]){re.escape(phrase)}(?![a-z0-9+#])"
+        return re.search(pattern, text) is not None
+
     @classmethod
     def extract_skills(cls, text: str) -> list[str]:
         text_lower = cls.clean_text(text)
         skills = set()
         for skill in cls.TECHNICAL_SKILLS | cls.SOFT_SKILLS:
-            if re.search(r"\b" + re.escape(skill) + r"\b", text_lower):
+            if cls._contains_phrase(text_lower, skill):
                 skills.add(skill)
+        for alias, canonical in cls.SKILL_ALIASES.items():
+            if cls._contains_phrase(text_lower, alias):
+                skills.add(canonical)
         return sorted(skills)
+
+    @classmethod
+    def normalize_skill(cls, skill: str) -> str:
+        cleaned = cls.clean_text(skill)
+        if not cleaned:
+            return ""
+        if cleaned in cls.SKILL_ALIASES:
+            return cls.SKILL_ALIASES[cleaned]
+        if cleaned in cls.TECHNICAL_SKILLS or cleaned in cls.SOFT_SKILLS:
+            return cleaned
+
+        detected = cls.extract_skills(cleaned)
+        return detected[0] if len(detected) == 1 else cleaned
 
     @classmethod
     def _similarity(cls, resume_text: str, job_description: str) -> float:
@@ -70,7 +117,21 @@ class ResumeAnalyzer:
 
     @classmethod
     def _required_skills(cls, required_skills_str: str) -> list[str]:
-        return sorted({s.strip().lower() for s in (required_skills_str or "").split(",") if s.strip()})
+        skills = set()
+        for item in re.split(r"[,;\n\r|]+", required_skills_str or ""):
+            item = item.strip(" \t-*•")
+            if not item:
+                continue
+
+            detected = cls.extract_skills(item)
+            if detected:
+                skills.update(detected)
+                continue
+
+            normalized = cls.normalize_skill(item)
+            if normalized:
+                skills.add(normalized)
+        return sorted(skills)
 
     @classmethod
     def analyze(cls, resume_text, job_description, required_skills_str="", min_exp=0, min_edu="bachelor"):

@@ -18,8 +18,11 @@ def create_app(test_config=None):
     app.config.from_object(Config)
     if test_config:
         app.config.update(test_config)
+        for key in ("SECRET_KEY", "JWT_SECRET", "ENCRYPTION_KEY"):
+            if key in test_config:
+                app.config[f"{key}_CONFIGURED"] = bool(test_config[key])
 
-    Config.validate()
+    Config.validate(app.config)
 
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)

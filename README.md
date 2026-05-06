@@ -7,7 +7,7 @@ Secure resume screening for hiring teams. RUME AI lets a user create job require
 - User accounts with bcrypt password hashing and JWT auth in an HttpOnly cookie.
 - SQLite database with encrypted resume text, names, emails, phones, and filenames.
 - Resume upload for PDF, DOCX, and TXT files with extension, MIME, size, and batch limits. Original files are parsed in memory and not stored.
-- Candidate ranking by weighted skill match, experience, education, and job-description similarity.
+- Candidate ranking by weighted skill match, experience, education, and job-description similarity, with common skill aliases normalized before scoring.
 - Dashboard, audit trail, job management, resume intake, searchable sorted results, candidate detail modal, candidate removal, and masked-email CSV export.
 
 ## Security Notes

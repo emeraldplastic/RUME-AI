@@ -3,6 +3,7 @@ import os
 import secrets
 from pathlib import Path
 
+from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,9 +29,17 @@ class Config:
     ENV = os.getenv("FLASK_ENV", os.getenv("APP_ENV", "development")).lower()
     TESTING = os.getenv("TESTING", "0") == "1"
 
-    SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_urlsafe(48)
-    JWT_SECRET = os.getenv("JWT_SECRET") or secrets.token_urlsafe(48)
-    ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "")
+    _SECRET_KEY_ENV = os.getenv("SECRET_KEY")
+    _JWT_SECRET_ENV = os.getenv("JWT_SECRET")
+    _ENCRYPTION_KEY_ENV = os.getenv("ENCRYPTION_KEY")
+
+    SECRET_KEY_CONFIGURED = bool(_SECRET_KEY_ENV)
+    JWT_SECRET_CONFIGURED = bool(_JWT_SECRET_ENV)
+    ENCRYPTION_KEY_CONFIGURED = bool(_ENCRYPTION_KEY_ENV)
+
+    SECRET_KEY = _SECRET_KEY_ENV or secrets.token_urlsafe(48)
+    JWT_SECRET = _JWT_SECRET_ENV or secrets.token_urlsafe(48)
+    ENCRYPTION_KEY = _ENCRYPTION_KEY_ENV or ""
 
     SQLALCHEMY_DATABASE_URI = database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -55,14 +64,21 @@ class Config:
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
 
     @classmethod
-    def validate(cls) -> None:
+    def validate(cls, values=None) -> None:
         """Fail fast when production security material is missing."""
-        if cls.TESTING:
+        def get(name, default=None):
+            if values is None:
+                return getattr(cls, name, default)
+            return values.get(name, default)
+
+        if get("TESTING", cls.TESTING):
             return
 
-        is_prod = cls.ENV in {"production", "prod"}
+        is_prod = str(get("ENV", cls.ENV)).lower() in {"production", "prod"}
         weak_values = {
             "",
+            "replace-with-a-long-random-secret",
+            "replace-with-a-different-long-random-secret",
             "your-secret-key-change-in-production",
             "your-jwt-secret-change-in-production",
             "dev-key-123",
@@ -70,16 +86,32 @@ class Config:
         }
 
         if is_prod:
+            secret_key = get("SECRET_KEY", "")
+            jwt_secret = get("JWT_SECRET", "")
+            encryption_key = get("ENCRYPTION_KEY", "")
             missing = []
-            if cls.SECRET_KEY in weak_values:
+            if (
+                not get("SECRET_KEY_CONFIGURED", bool(secret_key))
+                or secret_key in weak_values
+                or len(str(secret_key)) < 32
+            ):
                 missing.append("SECRET_KEY")
-            if cls.JWT_SECRET in weak_values:
+            if (
+                not get("JWT_SECRET_CONFIGURED", bool(jwt_secret))
+                or jwt_secret in weak_values
+                or len(str(jwt_secret)) < 32
+            ):
                 missing.append("JWT_SECRET")
-            if cls.ENCRYPTION_KEY in weak_values:
+            if not get("ENCRYPTION_KEY_CONFIGURED", bool(encryption_key)) or encryption_key in weak_values:
                 missing.append("ENCRYPTION_KEY")
             if missing:
                 joined = ", ".join(missing)
                 raise RuntimeError(f"Production requires secure values for: {joined}")
+
+            try:
+                Fernet(encryption_key.encode("utf-8") if isinstance(encryption_key, str) else encryption_key)
+            except (TypeError, ValueError):
+                raise RuntimeError("Production requires ENCRYPTION_KEY to be a valid Fernet key")
 
     @staticmethod
     def allowed_file(filename: str) -> bool:

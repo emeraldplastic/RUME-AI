@@ -21,6 +21,10 @@ class RumeApiSecurityTest(unittest.TestCase):
                 "TESTING": True,
                 "RATELIMIT_ENABLED": False,
                 "MAX_CONTENT_LENGTH": 1024 * 1024,
+                "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+                "SECRET_KEY": os.environ["SECRET_KEY"],
+                "JWT_SECRET": os.environ["JWT_SECRET"],
+                "ENCRYPTION_KEY": os.environ["ENCRYPTION_KEY"],
             }
         )
         self.client = self.app.test_client()
