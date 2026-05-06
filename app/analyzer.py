@@ -1,8 +1,7 @@
 """Deterministic resume analysis engine used by RUME AI."""
+import math
 import re
-
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from collections import Counter
 
 from app.resume_parser import ResumeParser
 
@@ -103,17 +102,40 @@ class ResumeAnalyzer:
         return detected[0] if len(detected) == 1 else cleaned
 
     @classmethod
+    def _terms(cls, text: str) -> list[str]:
+        words = cls.clean_text(text).split()
+        bigrams = [f"{first} {second}" for first, second in zip(words, words[1:])]
+        return words + bigrams
+
+    @classmethod
     def _similarity(cls, resume_text: str, job_description: str) -> float:
-        clean_resume = cls.clean_text(resume_text)
-        clean_job = cls.clean_text(job_description)
-        if not clean_resume or not clean_job:
+        documents = [cls._terms(job_description), cls._terms(resume_text)]
+        if not documents[0] or not documents[1]:
             return 0.0
-        try:
-            vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), max_features=6000)
-            tfidf = vectorizer.fit_transform([clean_job, clean_resume])
-            return float(cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0])
-        except ValueError:
+
+        counts = [Counter(document) for document in documents]
+        vocabulary = set(counts[0]) | set(counts[1])
+        if not vocabulary:
             return 0.0
+
+        def weighted(counter):
+            vector = {}
+            total = sum(counter.values()) or 1
+            for term in vocabulary:
+                if term not in counter:
+                    continue
+                document_frequency = int(term in counts[0]) + int(term in counts[1])
+                inverse_document_frequency = math.log((1 + len(documents)) / (1 + document_frequency)) + 1
+                vector[term] = (counter[term] / total) * inverse_document_frequency
+            return vector
+
+        job_vector, resume_vector = weighted(counts[0]), weighted(counts[1])
+        dot_product = sum(job_vector.get(term, 0.0) * resume_vector.get(term, 0.0) for term in vocabulary)
+        job_norm = math.sqrt(sum(value * value for value in job_vector.values()))
+        resume_norm = math.sqrt(sum(value * value for value in resume_vector.values()))
+        if not job_norm or not resume_norm:
+            return 0.0
+        return dot_product / (job_norm * resume_norm)
 
     @classmethod
     def _required_skills(cls, required_skills_str: str) -> list[str]:
