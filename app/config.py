@@ -29,7 +29,7 @@ def database_url() -> str:
 class Config:
     """Runtime configuration with production secret validation."""
 
-    ENV = os.getenv("FLASK_ENV", os.getenv("APP_ENV", "development")).lower()
+    ENV = os.getenv("FLASK_ENV", os.getenv("APP_ENV", "production" if os.getenv("VERCEL") else "development")).lower()
     TESTING = os.getenv("TESTING", "0") == "1"
 
     _SECRET_KEY_ENV = os.getenv("SECRET_KEY")
