@@ -10,12 +10,22 @@ from flask_limiter.util import get_remote_address
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from werkzeug.exceptions import HTTPException
+from collections import defaultdict
 
 from app.config import Config
 from app.observability import begin_request, complete_request, configure_logging, log_event, request_id_from_context
 
 db = SQLAlchemy()
-limiter = Limiter(key_func=get_remote_address)
+
+# Rate limit tracking for monitoring
+rate_limit_stats = defaultdict(lambda: {"hits": 0, "blocked": 0})
+
+def track_rate_limit(endpoint, blocked=False):
+    rate_limit_stats[endpoint]["hits"] += 1
+    if blocked:
+        rate_limit_stats[endpoint]["blocked"] += 1
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["200 per hour"])
 
 
 def create_app(test_config=None):
@@ -82,9 +92,12 @@ def create_app(test_config=None):
     def rate_limit_exceeded(exc):
         retry_after = getattr(exc, "retry_after", None)
         limit = getattr(exc, "limit", None)
+        endpoint = getattr(exc, "endpoint", "unknown")
+        track_rate_limit(endpoint, blocked=True)
         log_event(
             "info",
             "rate_limit.exceeded",
+            endpoint=endpoint,
             limit=str(limit or ""),
             retry_after_seconds=retry_after,
         )

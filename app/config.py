@@ -68,6 +68,7 @@ class Config:
     RATELIMIT_DEFAULT = os.getenv("RATELIMIT_DEFAULT", "200 per hour")
     RATELIMIT_HEADERS_ENABLED = os.getenv("RATELIMIT_HEADERS_ENABLED", "1") == "1"
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
+    RATELIMIT_STRATEGY = os.getenv("RATELIMIT_STRATEGY", "fixed-window")
     LOG_LEVEL = os.getenv("LOG_LEVEL") or ("DEBUG" if ENV == "development" else "INFO")
     STRUCTURED_LOG_STORAGE_ENABLED = os.getenv("STRUCTURED_LOG_STORAGE_ENABLED", "1") == "1"
 

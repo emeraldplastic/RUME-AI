@@ -1,17 +1,19 @@
 """API routes for RUME AI."""
+import csv
 import hashlib
+import io
 import json
 import re
 from datetime import datetime
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request, Response
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from app.analyzer import ResumeAnalyzer
 from app.config import Config
 from app.main import db, limiter
-from app.models import AnalysisResult, AuditLog, CalibrationVersion, CandidateDecision, Job, RequestLog, Resume, User
+from app.models import AnalysisResult, AuditLog, CalibrationVersion, CandidateComment, CandidateDecision, CandidateTag, Job, RequestLog, Resume, User
 from app.resume_parser import ResumeParser
 from app.security import SecurityManager, clear_auth_cookie, log_action, require_auth, set_auth_cookie
 
@@ -197,6 +199,62 @@ def dashboard():
         .all()
     )
 
+    # Advanced analytics
+    status_breakdown = {}
+    if job_ids:
+        status_results = (
+            db.session.query(AnalysisResult.status, func.count(AnalysisResult.id))
+            .join(Resume)
+            .filter(Resume.job_id.in_(job_ids))
+            .group_by(AnalysisResult.status)
+            .all()
+        )
+        status_breakdown = {status: count for status, count in status_results}
+
+    skill_frequency = {}
+    if job_ids:
+        all_skills = db.session.query(Resume.extracted_skills).filter(Resume.job_id.in_(job_ids)).all()
+        skill_counter = {}
+        for (skills_str,) in all_skills:
+            for skill in (skills_str or "").split(","):
+                if skill.strip():
+                    skill_counter[skill.strip()] = skill_counter.get(skill.strip(), 0) + 1
+        skill_frequency = dict(sorted(skill_counter.items(), key=lambda x: x[1], reverse=True)[:20])
+
+    score_distribution = {"0-25": 0, "26-50": 0, "51-75": 0, "76-100": 0}
+    if job_ids:
+        scores = (
+            db.session.query(AnalysisResult.overall_score)
+            .join(Resume)
+            .filter(Resume.job_id.in_(job_ids))
+            .all()
+        )
+        for (score,) in scores:
+            if score <= 25:
+                score_distribution["0-25"] += 1
+            elif score <= 50:
+                score_distribution["26-50"] += 1
+            elif score <= 75:
+                score_distribution["51-75"] += 1
+            else:
+                score_distribution["76-100"] += 1
+
+    time_series_data = []
+    if job_ids:
+        last_30_days = (
+            db.session.query(
+                func.date(AnalysisResult.analyzed_at).label('date'),
+                func.count(AnalysisResult.id).label('count')
+            )
+            .join(Resume)
+            .filter(Resume.job_id.in_(job_ids))
+            .filter(AnalysisResult.analyzed_at >= func.datetime('now', '-30 days'))
+            .group_by(func.date(AnalysisResult.analyzed_at))
+            .order_by(func.date(AnalysisResult.analyzed_at))
+            .all()
+        )
+        time_series_data = [{"date": str(date), "count": count} for date, count in last_30_days]
+
     security = SecurityManager
     return jsonify(
         {
@@ -210,6 +268,12 @@ def dashboard():
             },
             "recent_jobs": [job.to_dict(security, include_description=False) for job in jobs[:5]],
             "recent_activity": [entry.to_dict() for entry in activity],
+            "analytics": {
+                "status_breakdown": status_breakdown,
+                "skill_frequency": skill_frequency,
+                "score_distribution": score_distribution,
+                "time_series_data": time_series_data,
+            },
         }
     )
 
@@ -480,11 +544,46 @@ def results(job_id):
 
     status = request.args.get("status", "all")
     sort = request.args.get("sort", "score")
+    page = positive_int(request.args.get("page"), default=1, maximum=100)
+    per_page = positive_int(request.args.get("per_page"), default=20, maximum=100)
+    search_query = request.args.get("search", "").strip().lower()
+    min_score = positive_int(request.args.get("min_score"), default=0, maximum=100)
+    max_score = positive_int(request.args.get("max_score"), default=100, maximum=100)
+    skills_filter = request.args.get("skills", "").strip().lower()
 
-    resumes = Resume.query.filter_by(job_id=job.id).all()
+    query = Resume.query.filter_by(job_id=job.id)
+
+    # Apply search filter
+    if search_query:
+        query = query.join(AnalysisResult).filter(
+            db.or_(
+                Resume.candidate_name_encrypted.like(f"%{search_query}%"),
+                Resume.extracted_skills.like(f"%{search_query}%"),
+                AnalysisResult.strengths.like(f"%{search_query}%"),
+                AnalysisResult.weaknesses.like(f"%{search_query}%"),
+            )
+        )
+
+    # Apply skills filter
+    if skills_filter:
+        required_skills = [s.strip() for s in skills_filter.split(",")]
+        for skill in required_skills:
+            if skill:
+                query = query.filter(Resume.extracted_skills.like(f"%{skill}%"))
+
+    resumes = query.all()
     candidates = [resume.to_dict(security, blind=bool_arg("blind")) for resume in resumes]
+
+    # Apply status filter
     if status != "all":
         candidates = [c for c in candidates if c.get("analysis") and c["analysis"]["status"] == status]
+
+    # Apply score range filter
+    if min_score > 0 or max_score < 100:
+        candidates = [
+            c for c in candidates
+            if c.get("analysis") and min_score <= c["analysis"]["overall_score"] <= max_score
+        ]
 
     def score_key(candidate):
         return candidate.get("analysis", {}).get("overall_score", 0) if candidate.get("analysis") else 0
@@ -494,12 +593,38 @@ def results(job_id):
         "experience": lambda c: (-(c.get("years_experience") or 0), -score_key(c)),
         "uploaded": lambda c: (c.get("uploaded_at") or ""),
         "name": lambda c: c["candidate_name"].lower(),
+        "education": lambda c: (c.get("education_level") or "", -score_key(c)),
     }
     candidates.sort(key=sorters.get(sort, sorters["score"]), reverse=(sort == "uploaded"))
 
+    # Pagination
+    total_candidates = len(candidates)
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_candidates = candidates[start_idx:end_idx]
+
     job_data = job.to_dict(security)
     job_data["latest_calibration"] = job.calibration_versions[0].to_dict() if job.calibration_versions else None
-    return jsonify({"job": job_data, "candidates": candidates})
+    return jsonify({
+        "job": job_data,
+        "candidates": paginated_candidates,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": total_candidates,
+            "total_pages": (total_candidates + per_page - 1) // per_page,
+            "has_next": end_idx < total_candidates,
+            "has_prev": page > 1,
+        },
+        "filters_applied": {
+            "status": status,
+            "sort": sort,
+            "search": search_query,
+            "min_score": min_score,
+            "max_score": max_score,
+            "skills": skills_filter,
+        },
+    })
 
 
 @api.route("/jobs/<int:job_id>/candidates/<int:resume_id>", methods=["DELETE"])
@@ -553,6 +678,148 @@ def candidate_decision(job_id, resume_id):
     log_action("candidate_decision", "resume", resume.id, f"Decision: {decision}")
     db.session.commit()
     return jsonify(entry.to_dict(security)), 201
+
+
+@api.route("/jobs/<int:job_id>/candidates/bulk", methods=["POST", "DELETE"])
+@require_auth
+@limiter.limit("50 per hour")
+def bulk_candidate_operations(job_id):
+    security = SecurityManager
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    data = json_body()
+    resume_ids = data.get("resume_ids", [])
+    if not resume_ids or not isinstance(resume_ids, list):
+        return error("resume_ids array is required")
+    if len(resume_ids) > 100:
+        return error("Cannot process more than 100 candidates at once")
+
+    resumes = Resume.query.filter(Resume.id.in_(resume_ids), Resume.job_id == job.id).all()
+    found_ids = {resume.id for resume in resumes}
+    missing_ids = set(resume_ids) - found_ids
+
+    if request.method == "DELETE":
+        deleted_count = 0
+        for resume in resumes:
+            log_action("delete_candidate", "resume", resume.id, f"Bulk removed candidate from job {job.id}")
+            db.session.delete(resume)
+            deleted_count += 1
+        db.session.commit()
+        return jsonify({
+            "deleted": deleted_count,
+            "missing": len(missing_ids),
+            "message": f"Deleted {deleted_count} candidates"
+        })
+
+    # POST for bulk decisions
+    decision = SecurityManager.sanitize(data.get("decision") or "manual_review", 40)
+    allowed = {"manual_review", "advance", "hold", "reject", "needs_info"}
+    if decision not in allowed:
+        return error("Decision is invalid")
+
+    note = SecurityManager.sanitize(data.get("note"), 2000)
+    decisions_created = 0
+    for resume in resumes:
+        entry = CandidateDecision(
+            job_id=job.id,
+            resume_id=resume.id,
+            user_id=request.user_id,
+            decision=decision,
+            note_encrypted=security.encrypt(note),
+        )
+        db.session.add(entry)
+        decisions_created += 1
+
+    log_action("bulk_candidate_decision", "job", job.id, f"Bulk decision: {decision} for {decisions_created} candidates")
+    db.session.commit()
+    return jsonify({
+        "decisions_created": decisions_created,
+        "missing": len(missing_ids),
+        "decision": decision,
+        "message": f"Applied {decision} to {decisions_created} candidates"
+    })
+
+
+@api.route("/jobs/<int:job_id>/skill-gap-analysis", methods=["GET"])
+@require_auth
+def skill_gap_analysis(job_id):
+    security = SecurityManager
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    required_skills = ResumeAnalyzer._required_skills(job.required_skills)
+    resumes = Resume.query.filter_by(job_id=job.id).all()
+
+    skill_coverage = {skill: {"covered": 0, "total": len(resumes)} for skill in required_skills}
+    missing_skills_summary = {}
+
+    for resume in resumes:
+        resume_skills = set((resume.extracted_skills or "").split(","))
+        for skill in required_skills:
+            if skill in resume_skills:
+                skill_coverage[skill]["covered"] += 1
+
+        if resume.analysis:
+            missing = (resume.analysis.missing_skills or "").split(",")
+            for skill in missing:
+                if skill.strip():
+                    missing_skills_summary[skill.strip()] = missing_skills_summary.get(skill.strip(), 0) + 1
+
+    # Learning recommendations based on missing skills
+    learning_recommendations = {
+        "python": {
+            "courses": ["Python for Data Science", "Complete Python Bootcamp"],
+            "resources": ["Python.org Documentation", "Real Python"],
+            "estimated_time": "4-8 weeks",
+        },
+        "javascript": {
+            "courses": ["JavaScript: Understanding the Weird Parts", "Modern JavaScript"],
+            "resources": ["MDN Web Docs", "JavaScript.info"],
+            "estimated_time": "6-10 weeks",
+        },
+        "machine learning": {
+            "courses": ["Machine Learning Specialization", "Deep Learning Specialization"],
+            "resources": ["Coursera", "fast.ai"],
+            "estimated_time": "12-20 weeks",
+        },
+        "react": {
+            "courses": ["React - The Complete Guide", "Modern React with Redux"],
+            "resources": ["React Documentation", "React Patterns"],
+            "estimated_time": "4-8 weeks",
+        },
+        "aws": {
+            "courses": ["AWS Certified Solutions Architect", "AWS Cloud Practitioner"],
+            "resources": ["AWS Documentation", "AWS Training"],
+            "estimated_time": "8-12 weeks",
+        },
+    }
+
+    # Add generic recommendations for skills not in the predefined list
+    for skill in required_skills:
+        if skill not in learning_recommendations:
+            learning_recommendations[skill] = {
+                "courses": [f"Advanced {skill.title()} Course"],
+                "resources": [f"{skill.title()} Documentation", "Community Forums"],
+                "estimated_time": "4-12 weeks",
+            }
+
+    coverage_percentage = {
+        skill: round((data["covered"] / data["total"] * 100) if data["total"] > 0 else 0, 1)
+        for skill, data in skill_coverage.items()
+    }
+
+    return jsonify({
+        "job_id": job.id,
+        "required_skills": required_skills,
+        "skill_coverage": skill_coverage,
+        "coverage_percentage": coverage_percentage,
+        "missing_skills_summary": dict(sorted(missing_skills_summary.items(), key=lambda x: x[1], reverse=True)),
+        "learning_recommendations": learning_recommendations,
+        "total_candidates": len(resumes),
+    })
 
 
 @api.route("/jobs/<int:job_id>/calibrations", methods=["GET"])
@@ -630,3 +897,279 @@ def request_logs():
     limit = positive_int(request.args.get("limit"), default=50, maximum=200)
     logs = query.order_by(RequestLog.created_at.desc()).limit(limit or 50).all()
     return jsonify({"logs": [entry.to_dict() for entry in logs]})
+
+
+@api.route("/admin/rate-limit-stats", methods=["GET"])
+@require_auth
+def rate_limit_stats():
+    """Get rate limiting statistics for monitoring."""
+    from app.main import rate_limit_stats
+    
+    # Only allow admins or the user to see their own stats
+    # For now, return aggregated stats
+    return jsonify({
+        "rate_limit_stats": dict(rate_limit_stats),
+        "total_endpoints": len(rate_limit_stats),
+        "total_hits": sum(stats["hits"] for stats in rate_limit_stats.values()),
+        "total_blocked": sum(stats["blocked"] for stats in rate_limit_stats.values()),
+    })
+
+
+@api.route("/jobs/<int:job_id>/export", methods=["GET"])
+@require_auth
+def export_candidates(job_id):
+    security = SecurityManager
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    export_format = request.args.get("format", "csv").lower()
+    if export_format not in {"csv", "json"}:
+        return error("Format must be csv or json")
+
+    resumes = Resume.query.filter_by(job_id=job.id).all()
+    candidates = [resume.to_dict(security, blind=bool_arg("blind")) for resume in resumes]
+
+    if export_format == "json":
+        export_data = {
+            "job": job.to_dict(security),
+            "exported_at": datetime.utcnow().isoformat(),
+            "total_candidates": len(candidates),
+            "candidates": candidates,
+        }
+        response = jsonify(export_data)
+        response.headers["Content-Disposition"] = f'attachment; filename="job_{job_id}_candidates.json"'
+        return response
+
+    # CSV export
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header row
+    writer.writerow([
+        "Candidate Name", "Email", "Filename", "Overall Score", "Status",
+        "Skill Score", "Experience Score", "Education Score", "Similarity Score",
+        "Matched Skills", "Missing Skills", "Years Experience", "Education Level",
+        "Strengths", "Weaknesses", "Uploaded At"
+    ])
+    
+    # Data rows
+    for candidate in candidates:
+        analysis = candidate.get("analysis", {})
+        writer.writerow([
+            candidate.get("candidate_name", ""),
+            candidate.get("candidate_email_masked", ""),
+            candidate.get("filename", ""),
+            analysis.get("overall_score", ""),
+            analysis.get("status", ""),
+            analysis.get("skill_score", ""),
+            analysis.get("experience_score", ""),
+            analysis.get("education_score", ""),
+            analysis.get("similarity_score", ""),
+            analysis.get("matched_skills", ""),
+            analysis.get("missing_skills", ""),
+            candidate.get("years_experience", ""),
+            candidate.get("education_level", ""),
+            analysis.get("strengths", ""),
+            analysis.get("weaknesses", ""),
+            candidate.get("uploaded_at", ""),
+        ])
+    
+    output.seek(0)
+    response = Response(output.getvalue(), mimetype="text/csv")
+    response.headers["Content-Disposition"] = f'attachment; filename="job_{job_id}_candidates.csv"'
+    log_action("export_candidates", "job", job.id, f"Exported {len(candidates)} candidates as CSV")
+    db.session.commit()
+    return response
+
+
+@api.route("/jobs/<int:job_id>/candidates/<int:resume_id>/comments", methods=["GET", "POST"])
+@require_auth
+def candidate_comments(job_id, resume_id):
+    security = SecurityManager
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    resume = Resume.query.filter_by(id=resume_id, job_id=job.id).first()
+    if not resume:
+        return error("Candidate not found", 404)
+
+    if request.method == "GET":
+        comments = CandidateComment.query.filter_by(resume_id=resume.id).order_by(CandidateComment.created_at.desc()).all()
+        return jsonify({"comments": [comment.to_dict(security) for comment in comments]})
+
+    data = json_body()
+    comment = SecurityManager.sanitize(data.get("comment"), 5000)
+    if not comment or len(comment) < 1:
+        return error("Comment cannot be empty")
+
+    new_comment = CandidateComment(
+        job_id=job.id,
+        resume_id=resume.id,
+        user_id=request.user_id,
+        comment_encrypted=security.encrypt(comment),
+    )
+    db.session.add(new_comment)
+    log_action("add_comment", "resume", resume.id, "Added comment to candidate")
+    db.session.commit()
+    return jsonify(new_comment.to_dict(security)), 201
+
+
+@api.route("/jobs/<int:job_id>/candidates/<int:resume_id>/comments/<int:comment_id>", methods=["PUT", "DELETE"])
+@require_auth
+def candidate_comment_detail(job_id, resume_id, comment_id):
+    security = SecurityManager
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    resume = Resume.query.filter_by(id=resume_id, job_id=job.id).first()
+    if not resume:
+        return error("Candidate not found", 404)
+
+    comment = CandidateComment.query.filter_by(id=comment_id, resume_id=resume.id).first()
+    if not comment:
+        return error("Comment not found", 404)
+
+    if request.method == "DELETE":
+        log_action("delete_comment", "resume", resume.id, "Deleted comment from candidate")
+        db.session.delete(comment)
+        db.session.commit()
+        return jsonify({"message": "Comment deleted"})
+
+    data = json_body()
+    updated_comment = SecurityManager.sanitize(data.get("comment"), 5000)
+    if not updated_comment or len(updated_comment) < 1:
+        return error("Comment cannot be empty")
+
+    comment.comment_encrypted = security.encrypt(updated_comment)
+    log_action("update_comment", "resume", resume.id, "Updated comment on candidate")
+    db.session.commit()
+    return jsonify(comment.to_dict(security))
+
+
+@api.route("/jobs/<int:job_id>/candidates/<int:resume_id>/tags", methods=["GET", "POST"])
+@require_auth
+def candidate_tags(job_id, resume_id):
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    resume = Resume.query.filter_by(id=resume_id, job_id=job.id).first()
+    if not resume:
+        return error("Candidate not found", 404)
+
+    if request.method == "GET":
+        tags = CandidateTag.query.filter_by(resume_id=resume.id).order_by(CandidateTag.created_at.desc()).all()
+        return jsonify({"tags": [tag.to_dict() for tag in tags]})
+
+    data = json_body()
+    tag = SecurityManager.sanitize(data.get("tag"), 50)
+    color = SecurityManager.sanitize(data.get("color", "#3b82f6"), 7)
+    
+    if not tag or len(tag) < 1:
+        return error("Tag cannot be empty")
+    if not re.match(r"^#[0-9a-fA-F]{6}$", color):
+        return error("Color must be a valid hex color (e.g., #3b82f6)")
+
+    # Check if tag already exists
+    existing = CandidateTag.query.filter_by(resume_id=resume.id, tag=tag).first()
+    if existing:
+        return error("Tag already exists for this candidate", 409)
+
+    new_tag = CandidateTag(
+        job_id=job.id,
+        resume_id=resume.id,
+        user_id=request.user_id,
+        tag=tag,
+        color=color,
+    )
+    db.session.add(new_tag)
+    log_action("add_tag", "resume", resume.id, f"Added tag: {tag}")
+    db.session.commit()
+    return jsonify(new_tag.to_dict()), 201
+
+
+@api.route("/jobs/<int:job_id>/candidates/<int:resume_id>/tags/<int:tag_id>", methods=["DELETE"])
+@require_auth
+def candidate_tag_detail(job_id, resume_id, tag_id):
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    resume = Resume.query.filter_by(id=resume_id, job_id=job.id).first()
+    if not resume:
+        return error("Candidate not found", 404)
+
+    tag = CandidateTag.query.filter_by(id=tag_id, resume_id=resume.id).first()
+    if not tag:
+        return error("Tag not found", 404)
+
+    log_action("delete_tag", "resume", resume.id, f"Deleted tag: {tag.tag}")
+    db.session.delete(tag)
+    db.session.commit()
+    return jsonify({"message": "Tag deleted"})
+
+
+@api.route("/jobs/<int:job_id>/tags", methods=["GET"])
+@require_auth
+def job_tags(job_id):
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    tags = db.session.query(
+        CandidateTag.tag,
+        CandidateTag.color,
+        func.count(CandidateTag.id).label('count')
+    ).filter_by(job_id=job.id).group_by(CandidateTag.tag, CandidateTag.color).all()
+    
+    tag_summary = [{"tag": tag, "color": color, "count": count} for tag, color, count in tags]
+    return jsonify({"tags": sorted(tag_summary, key=lambda x: x["count"], reverse=True)})
+
+
+@api.route("/search", methods=["GET"])
+@require_auth
+def global_search():
+    security = SecurityManager
+    query = request.args.get("q", "").strip().lower()
+    if not query or len(query) < 2:
+        return error("Search query must be at least 2 characters")
+
+    search_type = request.args.get("type", "all")
+    limit = positive_int(request.args.get("limit"), default=20, maximum=50)
+
+    results = {"jobs": [], "candidates": []}
+
+    if search_type in {"all", "jobs"}:
+        jobs = Job.query.filter_by(user_id=request.user_id).filter(
+            db.or_(
+                Job.title.like(f"%{query}%"),
+                Job.required_skills.like(f"%{query}%"),
+            )
+        ).limit(limit).all()
+        results["jobs"] = [job.to_dict(security, include_description=False) for job in jobs]
+
+    if search_type in {"all", "candidates"}:
+        user_job_ids = [job.id for job in Job.query.filter_by(user_id=request.user_id).all()]
+        if user_job_ids:
+            resumes = Resume.query.filter(Resume.job_id.in_(user_job_ids)).filter(
+                db.or_(
+                    Resume.candidate_name_encrypted.like(f"%{query}%"),
+                    Resume.extracted_skills.like(f"%{query}%"),
+                )
+            ).join(AnalysisResult).filter(
+                db.or_(
+                    AnalysisResult.strengths.like(f"%{query}%"),
+                    AnalysisResult.weaknesses.like(f"%{query}%"),
+                    AnalysisResult.matched_skills.like(f"%{query}%"),
+                )
+            ).limit(limit).all()
+            results["candidates"] = [resume.to_dict(security) for resume in resumes]
+
+    return jsonify({
+        "query": query,
+        "results": results,
+        "total": len(results["jobs"]) + len(results["candidates"]),
+    })

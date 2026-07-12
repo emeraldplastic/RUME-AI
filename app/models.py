@@ -128,6 +128,18 @@ class Resume(db.Model):
         cascade="all, delete-orphan",
         order_by="CandidateDecision.created_at.desc()",
     )
+    comments = db.relationship(
+        "CandidateComment",
+        back_populates="resume",
+        cascade="all, delete-orphan",
+        order_by="CandidateComment.created_at.desc()",
+    )
+    tags = db.relationship(
+        "CandidateTag",
+        back_populates="resume",
+        cascade="all, delete-orphan",
+        order_by="CandidateTag.created_at.desc()",
+    )
 
     __table_args__ = (
         db.UniqueConstraint("job_id", "file_sha256", name="uq_resume_job_file"),
@@ -299,5 +311,59 @@ class RequestLog(db.Model):
             "status_code": self.status_code,
             "duration_ms": self.duration_ms,
             "payload": self.payload(),
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+class CandidateComment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey("job.id"), nullable=False, index=True)
+    resume_id = db.Column(db.Integer, db.ForeignKey("resume.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    comment_encrypted = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    resume = db.relationship("Resume", back_populates="comments")
+
+    __table_args__ = (db.Index("rume_idx_comment_resume_time", "resume_id", "created_at"),)
+
+    def to_dict(self, security=None):
+        comment = security.decrypt(self.comment_encrypted) if security and self.comment_encrypted else ""
+        return {
+            "id": self.id,
+            "job_id": self.job_id,
+            "resume_id": self.resume_id,
+            "user_id": self.user_id,
+            "comment": comment,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class CandidateTag(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey("job.id"), nullable=False, index=True)
+    resume_id = db.Column(db.Integer, db.ForeignKey("resume.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    tag = db.Column(db.String(50), nullable=False, index=True)
+    color = db.Column(db.String(7), default="#3b82f6")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    resume = db.relationship("Resume", back_populates="tags")
+
+    __table_args__ = (
+        db.UniqueConstraint("resume_id", "tag", name="uq_resume_tag"),
+        db.Index("rume_idx_tag_job_time", "job_id", "created_at"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "job_id": self.job_id,
+            "resume_id": self.resume_id,
+            "user_id": self.user_id,
+            "tag": self.tag,
+            "color": self.color,
             "created_at": self.created_at.isoformat(),
         }
