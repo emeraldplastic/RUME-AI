@@ -20,6 +20,16 @@ from app.security import SecurityManager, clear_auth_cookie, log_action, require
 api = Blueprint("api", __name__, url_prefix="/api")
 
 
+@api.route("/health", methods=["GET"])
+def health_check():
+    """Health check endpoint for monitoring and load balancers."""
+    return jsonify({
+        "status": "healthy",
+        "service": "rume-ai",
+        "timestamp": datetime.utcnow().isoformat(),
+    }), 200
+
+
 def json_body():
     return request.get_json(silent=True) or {}
 
