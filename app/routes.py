@@ -105,6 +105,7 @@ def create_calibration_version(job):
 
 @api.route("/auth/register", methods=["POST"])
 @limiter.limit("5 per minute")
+@limiter.limit(Config.RATELIMIT_AUTH)
 def register():
     data = json_body()
     username = SecurityManager.sanitize(data.get("username"), 80).lower()
@@ -141,6 +142,7 @@ def register():
 
 @api.route("/auth/login", methods=["POST"])
 @limiter.limit("10 per minute")
+@limiter.limit(Config.RATELIMIT_AUTH)
 def login():
     data = json_body()
     username = SecurityManager.sanitize(data.get("username"), 80).lower()
@@ -172,6 +174,62 @@ def me():
     if not user or not user.is_active:
         return error("User not found", 404)
     return jsonify({"user": user.to_dict()})
+
+
+@api.route("/auth/me/data-export", methods=["GET"])
+@require_auth
+def data_export():
+    """GDPR data export endpoint - returns all user data."""
+    if not Config.ALLOW_DATA_EXPORT:
+        return error("Data export is disabled", 403)
+    
+    security = SecurityManager
+    user = User.query.get(request.user_id)
+    if not user:
+        return error("User not found", 404)
+    
+    jobs = Job.query.filter_by(user_id=user.id).all()
+    job_ids = [job.id for job in jobs]
+    resumes = Resume.query.filter(Resume.job_id.in_(job_ids)).all() if job_ids else []
+    
+    user_data = {
+        "user": user.to_dict(),
+        "jobs": [job.to_dict(security) for job in jobs],
+        "resumes": [resume.to_dict(security) for resume in resumes],
+        "exported_at": datetime.utcnow().isoformat(),
+    }
+    
+    log_action("data_export", "user", user.id, "User requested data export")
+    db.session.commit()
+    
+    return jsonify(user_data)
+
+
+@api.route("/auth/me/account-delete", methods=["POST"])
+@require_auth
+def account_delete():
+    """GDPR account deletion endpoint - permanently deletes user and all data."""
+    data = json_body()
+    confirmation = data.get("confirmation", "").lower()
+    
+    if confirmation != "delete my account":
+        return error("You must type 'delete my account' to confirm")
+    
+    user = User.query.get(request.user_id)
+    if not user:
+        return error("User not found", 404)
+    
+    # Delete all user's jobs (cascade will delete resumes, analysis, etc.)
+    jobs = Job.query.filter_by(user_id=user.id).all()
+    for job in jobs:
+        db.session.delete(job)
+    
+    # Delete user
+    log_action("account_delete", "user", user.id, "Account permanently deleted")
+    db.session.delete(user)
+    db.session.commit()
+    
+    return jsonify({"message": "Account and all associated data have been permanently deleted"})
 
 
 @api.route("/dashboard", methods=["GET"])
@@ -378,6 +436,7 @@ def job_detail(job_id):
 @api.route("/jobs/<int:job_id>/upload", methods=["POST"])
 @require_auth
 @limiter.limit("30 per hour")
+@limiter.limit(Config.RATELIMIT_UPLOAD)
 def upload_resumes(job_id):
     security = SecurityManager
     job = owned_job(job_id)

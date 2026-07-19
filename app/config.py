@@ -69,8 +69,13 @@ class Config:
     RATELIMIT_HEADERS_ENABLED = os.getenv("RATELIMIT_HEADERS_ENABLED", "1") == "1"
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
     RATELIMIT_STRATEGY = os.getenv("RATELIMIT_STRATEGY", "fixed-window")
+    RATELIMIT_AUTH = os.getenv("RATELIMIT_AUTH", "100 per hour")
+    RATELIMIT_UPLOAD = os.getenv("RATELIMIT_UPLOAD", "20 per hour")
+    RATELIMIT_ANALYZE = os.getenv("RATELIMIT_ANALYZE", "50 per hour")
     LOG_LEVEL = os.getenv("LOG_LEVEL") or ("DEBUG" if ENV == "development" else "INFO")
     STRUCTURED_LOG_STORAGE_ENABLED = os.getenv("STRUCTURED_LOG_STORAGE_ENABLED", "1") == "1"
+    DATA_RETENTION_DAYS = int(os.getenv("DATA_RETENTION_DAYS", "365"))
+    ALLOW_DATA_EXPORT = os.getenv("ALLOW_DATA_EXPORT", "1") == "1"
 
     @classmethod
     def validate(cls, values=None) -> None:

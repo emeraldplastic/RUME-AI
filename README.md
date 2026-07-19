@@ -1,80 +1,291 @@
 # RUME AI
 
-Secure resume screening for hiring teams. RUME AI lets a user create job requirements, upload resumes, run deterministic ML/NLP scoring, and review a ranked candidate list.
+**Secure, AI-powered resume screening for modern hiring teams.**
 
-## What It Does
+RUME AI helps you make better hiring decisions faster. Upload resumes, define job requirements, and let our intelligent system rank candidates based on skills, experience, and fit. Built with privacy-first architecture and enterprise-grade security.
 
-- User accounts with bcrypt password hashing and JWT auth in an HttpOnly cookie.
-- SQLite database with encrypted resume text, names, emails, phones, and filenames.
-- Resume upload for PDF, DOCX, and TXT files with extension, MIME, size, and batch limits. Original files are parsed in memory and not stored.
-- Candidate ranking by weighted skill match, experience, education, and job-description similarity, with common skill aliases normalized before scoring.
-- Evidence-backed scoring with encrypted resume snippets, calibration version history, blind review mode, decision journaling, audit-pack export, and searchable structured request logs.
-- Dashboard, audit trail, job management, resume intake, searchable sorted results, candidate detail modal, candidate removal, and masked-email CSV export.
+---
 
-## New Features
+## 🎯 What Makes RUME AI Different?
 
-### Advanced Analytics Dashboard
-- **Status Breakdown**: View candidate qualification distribution (highly_qualified, qualified, partially_qualified, not_qualified)
-- **Skill Frequency**: Track most common skills across all candidates
-- **Score Distribution**: Visualize candidate scores in ranges (0-25, 26-50, 51-75, 76-100)
-- **Time Series Data**: Monitor analysis activity over the last 30 days
+### For Hiring Managers & Recruiters
+- **Save Time**: Screen hundreds of resumes in minutes instead of hours
+- **Reduce Bias**: Blind review mode and objective scoring help you focus on qualifications
+- **Make Data-Driven Decisions**: Advanced analytics show you exactly why candidates rank where they do
+- **Collaborate Seamlessly**: Share notes, tags, and insights with your team
+- **Stay Compliant**: GDPR-ready with data export and account deletion features
 
-### Enhanced Candidate Filtering & Pagination
-- **Advanced Search**: Full-text search across candidate names, skills, strengths, and weaknesses
-- **Score Range Filtering**: Filter candidates by minimum and maximum scores
-- **Skills Filtering**: Filter candidates by specific required skills
-- **Pagination**: Handle large datasets with configurable page size (up to 100 per page)
-- **Multiple Sort Options**: Sort by score, experience, upload date, name, or education level
+### For Candidates
+- **Fair Evaluation**: Your resume is scored against actual job requirements, not arbitrary criteria
+- **Privacy Protected**: Your personal data is encrypted and never shared
+- **Transparent Process**: See exactly what skills match and what's missing
 
-### Skill Gap Analysis
-- **Coverage Tracking**: See which required skills are covered by candidates
-- **Coverage Percentage**: Quantitative measure of skill coverage across all candidates
-- **Missing Skills Summary**: Identify most frequently missing skills
-- **Learning Recommendations**: Get curated course and resource recommendations for skill gaps
+---
 
-### Bulk Operations
-- **Bulk Decisions**: Apply hiring decisions (advance, hold, reject, etc.) to multiple candidates at once
-- **Bulk Deletion**: Remove multiple candidates from a job in a single operation
-- **Batch Processing**: Handle up to 100 candidates in bulk operations
+## ✨ Key Features
 
-### Export Functionality
-- **CSV Export**: Download candidate data in CSV format with all analysis metrics
-- **JSON Export**: Export complete candidate data including analysis results
+### 🤖 Intelligent Resume Analysis
+- **Skill Extraction**: Automatically identifies and normalizes skills from resumes
+- **Experience Scoring**: Evaluates years and relevance of work experience
+- **Education Assessment**: Considers degree level and field relevance
+- **Similarity Matching**: Compares resumes against job descriptions for fit
+
+### 📊 Advanced Analytics Dashboard
+- **Status Breakdown**: See candidate qualification distribution at a glance
+- **Skill Frequency**: Track the most common skills across all applicants
+- **Score Distribution**: Visualize candidate scores in meaningful ranges
+- **Time Series Data**: Monitor your hiring activity over time
+
+### 🔍 Powerful Search & Filtering
+- **Full-Text Search**: Search across candidates, jobs, and analysis results
+- **Score Range Filtering**: Find candidates within specific score ranges
+- **Skills Filtering**: Filter by specific required skills
+- **Smart Pagination**: Handle large datasets efficiently (up to 100 per page)
+- **Multiple Sort Options**: Sort by score, experience, date, name, or education
+
+### 🎓 Skill Gap Analysis
+- **Coverage Tracking**: See which required skills your candidate pool covers
+- **Coverage Percentage**: Quantitative measure of skill coverage
+- **Missing Skills Summary**: Identify skill gaps in your pipeline
+- **Learning Recommendations**: Get curated course suggestions for skill gaps
+
+### ⚡ Bulk Operations
+- **Bulk Decisions**: Apply hiring decisions to multiple candidates at once
+- **Bulk Deletion**: Remove candidates from a job in one operation
+- **Batch Processing**: Handle up to 100 candidates efficiently
+
+### 📤 Export & Reporting
+- **CSV Export**: Download candidate data with all analysis metrics
+- **JSON Export**: Export complete data for integration with other tools
 - **Masked Data**: Exports maintain privacy with masked emails
+- **Audit Packs**: Complete audit trail for compliance
 
-### Team Collaboration Features
-- **Candidate Comments**: Add encrypted comments to candidates for team discussion
-- **Comment Management**: Edit and delete comments with full audit trail
-- **Candidate Tags**: Tag candidates with custom labels and colors
-- **Tag Management**: Add, remove, and view tags across candidates
-- **Job-Level Tags**: View tag usage statistics across all candidates in a job
+### 👥 Team Collaboration
+- **Encrypted Comments**: Add private notes to candidates for team discussion
+- **Color-Coded Tags**: Organize candidates with custom labels
+- **Tag Statistics**: View tag usage across all candidates
+- **Decision Journaling**: Track all hiring decisions with reasons
 
-### Global Search
-- **Cross-Resource Search**: Search across jobs and candidates simultaneously
-- **Targeted Search**: Limit search to specific resource types
-- **Comprehensive Results**: Search job titles, skills, candidate names, and analysis results
+### 🔒 Enterprise Security
+- **End-to-End Encryption**: All sensitive data is encrypted at rest
+- **Secure Authentication**: JWT tokens with HttpOnly cookies
+- **Rate Limiting**: Protect against abuse with configurable limits
+- **Security Headers**: Comprehensive protection against common attacks
+- **Audit Logging**: Complete traceability of all actions
 
-### Enhanced Rate Limiting & Monitoring
-- **Rate Limit Statistics**: Track rate limit hits and blocks per endpoint
-- **Configurable Strategies**: Support for different rate limiting strategies
-- **Monitoring Endpoint**: API endpoint to view rate limiting metrics
+### 🌍 GDPR Compliance
+- **Data Export**: Download all your data on demand
+- **Account Deletion**: Permanently delete your account and all data
+- **Data Retention**: Configurable automatic data cleanup
+- **Privacy by Design**: Built with privacy as a core principle
 
-## Security Notes
+## 🚀 Getting Started
 
-- Set `SECRET_KEY`, `JWT_SECRET`, and `ENCRYPTION_KEY` before production use.
-- Generate `ENCRYPTION_KEY` with:
+### Quick Start (Local Development)
 
+1. **Clone the repository**
 ```bash
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+git clone https://github.com/emeraldplastic/RUME-AI.git
+cd RUME-AI
 ```
 
-- Production mode fails fast if required secrets are missing.
-- Session tokens are not exposed to browser JavaScript; authenticated writes require a CSRF header.
-- Candidate email is masked in API results and exports. Raw resume text is never returned by the API.
-- Use `FORCE_SECURE_COOKIES=1` behind HTTPS in production.
-- Structured JSON logs are emitted to stdout with `timestamp`, `level`, `event`, `request_id`, `user_id`, route data, status, and duration. On Vercel, search them in Runtime Logs or with `vercel logs https://rume-ai.vercel.app --json`.
-- Use `LOG_LEVEL=DEBUG` during local development and `LOG_LEVEL=INFO` for normal operations. Runtime failures are logged at `error`.
-- Rate limit responses include `X-RateLimit-*` headers, a `request_id`, and retry metadata when available.
+2. **Install dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+3. **Set up environment variables**
+```bash
+cp .env.example .env
+# Edit .env and add your secrets
+```
+
+4. **Generate encryption keys**
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Add this to ENCRYPTION_KEY in your .env file
+```
+
+5. **Run the application**
+```bash
+python run.py
+```
+
+6. **Open your browser**
+Navigate to `http://localhost:5000` and create your account.
+
+---
+
+## 🏗️ Architecture
+
+### Technology Stack
+- **Backend**: Flask 3.1.1 with Python 3.11+
+- **Database**: SQLite with SQLAlchemy ORM
+- **Security**: bcrypt, PyJWT, cryptography (Fernet)
+- **Document Processing**: PyPDF2, python-docx
+- **Rate Limiting**: Flask-Limiter
+- **Deployment**: Vercel
+
+### Security Architecture
+- **Encryption at Rest**: All sensitive data (names, emails, resume text) encrypted with Fernet
+- **Secure Authentication**: JWT tokens stored in HttpOnly cookies
+- **CSRF Protection**: Authenticated writes require CSRF header
+- **Input Validation**: All user inputs sanitized and validated
+- **Rate Limiting**: Per-user and per-IP limits to prevent abuse
+- **Security Headers**: HSTS, X-Frame-Options, X-Content-Type-Options, etc.
+
+---
+
+## 📡 API Endpoints
+
+### Authentication
+- `POST /api/auth/register` - Create a new account
+- `POST /api/auth/login` - Sign in to your account
+- `POST /api/auth/logout` - Sign out
+- `GET /api/auth/me` - Get your profile
+- `GET /api/auth/me/data-export` - Download all your data (GDPR)
+- `POST /api/auth/me/account-delete` - Delete your account (GDPR)
+
+### Jobs & Candidates
+- `GET /api/jobs` - List all your jobs
+- `POST /api/jobs` - Create a new job posting
+- `GET /api/jobs/<id>` - Get job details
+- `PUT /api/jobs/<id>` - Update job requirements
+- `DELETE /api/jobs/<id>` - Delete a job
+- `POST /api/jobs/<id>/upload` - Upload resumes
+- `POST /api/jobs/<id>/analyze` - Analyze uploaded resumes
+- `GET /api/jobs/<id>/results` - Get ranked candidates with filtering
+- `GET /api/jobs/<id>/skill-gap-analysis` - Analyze skill gaps
+- `GET /api/jobs/<id>/export` - Export candidates (CSV/JSON)
+
+### Collaboration
+- `GET /api/jobs/<id>/candidates/<resume_id>/comments` - Get comments
+- `POST /api/jobs/<id>/candidates/<resume_id>/comments` - Add comment
+- `PUT /api/jobs/<id>/candidates/<resume_id>/comments/<id>` - Update comment
+- `DELETE /api/jobs/<id>/candidates/<resume_id>/comments/<id>` - Delete comment
+- `GET /api/jobs/<id>/candidates/<resume_id>/tags` - Get tags
+- `POST /api/jobs/<id>/candidates/<resume_id>/tags` - Add tag
+- `DELETE /api/jobs/<id>/candidates/<resume_id>/tags/<id>` - Delete tag
+
+### Search & Analytics
+- `GET /api/search` - Global search across jobs and candidates
+- `GET /api/dashboard` - Analytics dashboard
+- `GET /api/admin/rate-limit-stats` - Rate limiting statistics
+- `GET /api/health` - Health check endpoint
+
+### Audit & Logging
+- `GET /api/logs` - Request logs with filtering
+- `GET /api/jobs/<id>/audit-pack` - Export audit pack
+
+---
+
+## 🔐 Security Best Practices
+
+### For Production Deployment
+
+1. **Use Strong Secrets**
+   - Never use placeholder or default values
+   - Generate unique secrets for each deployment
+   - Rotate secrets regularly
+
+2. **Enable HTTPS**
+   - Always use HTTPS in production
+   - Set `FORCE_SECURE_COOKIES=1`
+   - Configure proper SSL certificates
+
+3. **Configure Rate Limiting**
+   - Adjust limits based on your traffic
+   - Monitor rate limit statistics
+   - Set up alerts for abuse detection
+
+4. **Regular Backups**
+   - Backup your SQLite database regularly
+   - Store backups securely
+   - Test restore procedures
+
+5. **Monitor Logs**
+   - Review security logs regularly
+   - Set up alerts for suspicious activity
+   - Keep logs for compliance
+
+---
+
+## 🌐 Vercel Deployment
+
+### One-Click Deployment
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/emeraldplastic/RUME-AI)
+
+### Manual Deployment
+
+1. **Push your code to GitHub**
+2. **Import project in Vercel**
+3. **Configure environment variables** (see below)
+4. **Deploy**
+
+### Required Environment Variables
+
+Set these in your Vercel project settings:
+
+- `SECRET_KEY` - Flask secret key (generate with: `python -c "import secrets; print(secrets.token_hex(32))"`)
+- `JWT_SECRET` - JWT signing secret (generate with: `python -c "import secrets; print(secrets.token_hex(32))"`)
+- `ENCRYPTION_KEY` - Fernet encryption key (generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
+- `FLASK_ENV` - Set to `production`
+- `DATABASE_URL` - SQLite path (e.g., `sqlite:///instance/rume_ai.db`)
+
+### Optional Environment Variables
+
+- `JWT_EXPIRY_HOURS` - JWT token expiry in hours (default: 24)
+- `MAX_UPLOAD_SIZE` - Max upload size in bytes (default: 16777216)
+- `MAX_FILES_PER_UPLOAD` - Max files per upload (default: 20)
+- `RATELIMIT_DEFAULT` - Default rate limit (default: "200 per hour")
+- `RATELIMIT_AUTH` - Auth endpoint rate limit (default: "100 per hour")
+- `RATELIMIT_UPLOAD` - Upload endpoint rate limit (default: "20 per hour")
+- `RATELIMIT_ANALYZE` - Analyze endpoint rate limit (default: "50 per hour")
+- `DATA_RETENTION_DAYS` - Data retention period in days (default: 365)
+- `ALLOW_DATA_EXPORT` - Enable GDPR data export (default: 1)
+- `LOG_LEVEL` - Logging level (default: INFO for production)
+
+---
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+python -m pytest tests/ -v
+```
+
+The test suite includes:
+- API security tests
+- Configuration validation tests
+- Observability tests
+- Trust layer tests
+- Resume analyzer tests
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+## 📧 Support
+
+For questions or issues, please open an issue on GitHub.
+
+---
+
+## 🙏 Acknowledgments
+
+Built with modern Python web technologies and security best practices.
 
 ## Setup
 

@@ -3,7 +3,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 from flask_limiter import Limiter
 from flask_limiter.errors import RateLimitExceeded
 from flask_limiter.util import get_remote_address
@@ -25,7 +25,16 @@ def track_rate_limit(endpoint, blocked=False):
     if blocked:
         rate_limit_stats[endpoint]["blocked"] += 1
 
-limiter = Limiter(key_func=get_remote_address, default_limits=["200 per hour"])
+
+def get_rate_limit_key():
+    """Combine user ID and IP address for rate limiting."""
+    from flask import g
+    if hasattr(g, 'user_id') and g.user_id:
+        return f"user:{g.user_id}"
+    return f"ip:{get_remote_address()}"
+
+
+limiter = Limiter(key_func=get_rate_limit_key, default_limits=["200 per hour"])
 
 
 def create_app(test_config=None):
@@ -36,9 +45,37 @@ def create_app(test_config=None):
     app.config.from_object(Config)
     if test_config:
         app.config.update(test_config)
-        for key in ("SECRET_KEY", "JWT_SECRET", "ENCRYPTION_KEY"):
-            if key in test_config:
-                app.config[f"{key}_CONFIGURED"] = bool(test_config[key])
+
+    # Security headers
+    @app.after_request
+    def add_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        return response
+
+    # Request validation middleware
+    @app.before_request
+    def validate_request():
+        """Validate incoming requests for security."""
+        # Check content length
+        content_length = request.content_length
+        max_length = app.config.get("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)
+        if content_length and content_length > max_length:
+            return jsonify({"error": "Request too large"}), 413
+        
+        # Validate Content-Type for POST/PUT requests
+        if request.method in ("POST", "PUT", "PATCH"):
+            if request.is_json:
+                try:
+                    data = request.get_json()
+                    if data is None:
+                        return jsonify({"error": "Invalid JSON"}), 400
+                except Exception:
+                    return jsonify({"error": "Invalid JSON"}), 400
 
     configure_logging(app)
     Config.validate(app.config)
