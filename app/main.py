@@ -46,17 +46,6 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
 
-    # Security headers
-    @app.after_request
-    def add_security_headers(response):
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        return response
-
     # Request validation middleware
     @app.before_request
     def validate_request():
@@ -182,8 +171,13 @@ def create_app(test_config=None):
         return render_template("index.html")
 
     with app.app_context():
-        db.create_all()
-        _ensure_sqlite_schema()
+        try:
+            db.create_all()
+            _ensure_sqlite_schema()
+        except Exception as exc:
+            app.logger.error(f"Database initialization error: {exc}")
+            if not os.getenv("VERCEL"):
+                raise
 
     return app
 
