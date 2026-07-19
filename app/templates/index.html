@@ -7,20 +7,23 @@
     <title>RUME AI - Secure Resume Screening</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="bg-grid"></div>
+    <div class="bg-mesh"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
 
     <section class="auth-wrapper" id="auth-wrapper">
-        <div class="auth-card">
+        <div class="auth-card glass-panel">
             <div class="brand-lockup">
-                <div class="brand-mark" aria-hidden="true">
+                <div class="brand-mark glowing" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6"/><path d="M10 17h4"/></svg>
                 </div>
                 <div>
-                    <h1>RUME AI</h1>
+                    <h1 class="gradient-text">RUME AI</h1>
                     <p>Private resume intelligence</p>
                 </div>
             </div>
@@ -33,44 +36,44 @@
             <form class="auth-form active" id="login-form">
                 <label>
                     Username
-                    <input id="login-username" name="username" autocomplete="username" required>
+                    <input class="glass-input" id="login-username" name="username" autocomplete="username" required>
                 </label>
                 <label>
                     Password
-                    <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+                    <input class="glass-input" id="login-password" name="password" type="password" autocomplete="current-password" required>
                 </label>
-                <button class="btn btn-primary btn-full" type="submit">Sign in</button>
+                <button class="btn btn-primary btn-full glowing-btn" type="submit">Sign in</button>
             </form>
 
             <form class="auth-form" id="register-form">
                 <label>
                     Username
-                    <input id="reg-username" name="username" autocomplete="username" minlength="3" required>
+                    <input class="glass-input" id="reg-username" name="username" autocomplete="username" minlength="3" required>
                 </label>
                 <label>
                     Email
-                    <input id="reg-email" name="email" type="email" autocomplete="email" required>
+                    <input class="glass-input" id="reg-email" name="email" type="email" autocomplete="email" required>
                 </label>
                 <label>
                     Display name
-                    <input id="reg-display" name="display_name" autocomplete="name">
+                    <input class="glass-input" id="reg-display" name="display_name" autocomplete="name">
                 </label>
                 <label>
                     Password
-                    <input id="reg-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                    <input class="glass-input" id="reg-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
                 </label>
-                <button class="btn btn-primary btn-full" type="submit">Create account</button>
+                <button class="btn btn-primary btn-full glowing-btn" type="submit">Create account</button>
             </form>
         </div>
     </section>
 
     <div class="app-shell" id="app-shell" hidden>
-        <aside class="sidebar" id="sidebar">
+        <aside class="sidebar glass-panel" id="sidebar">
             <div class="sidebar-brand">
-                <div class="brand-mark small" aria-hidden="true">
+                <div class="brand-mark small glowing" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>
                 </div>
-                <span>RUME AI</span>
+                <span class="gradient-text">RUME AI</span>
             </div>
             <nav class="sidebar-nav" aria-label="Primary">
                 <button class="nav-item active" data-view="dashboard" type="button">Dashboard</button>
@@ -91,70 +94,70 @@
             </div>
         </aside>
 
-        <header class="mobile-bar">
+        <header class="mobile-bar glass-panel">
             <button class="icon-btn" id="btn-menu" type="button" title="Menu">
                 <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>
             </button>
-            <strong>RUME AI</strong>
+            <strong class="gradient-text">RUME AI</strong>
             <button class="icon-btn" id="btn-mobile-logout" type="button" title="Sign out">
                 <svg viewBox="0 0 24 24"><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
             </button>
         </header>
 
         <main class="main-area">
-            <section class="view active" id="view-dashboard">
+            <section class="view active fade-in" id="view-dashboard">
                 <div class="view-header">
                     <div>
                         <p class="eyebrow">Overview</p>
                         <h2 id="greeting">Dashboard</h2>
                     </div>
-                    <button class="btn btn-primary" data-action="new-job" type="button">New job</button>
+                    <button class="btn btn-primary glowing-btn" data-action="new-job" type="button">New job</button>
                 </div>
 
                 <div class="stats-grid">
-                    <article class="stat-card"><span>Total jobs</span><strong id="dash-total-jobs">0</strong></article>
-                    <article class="stat-card"><span>Resumes</span><strong id="dash-total-resumes">0</strong></article>
-                    <article class="stat-card"><span>Analyzed</span><strong id="dash-analyzed">0</strong></article>
-                    <article class="stat-card"><span>Avg score</span><strong id="dash-avg-score">0</strong></article>
+                    <article class="stat-card glass-panel hover-lift"><span>Total jobs</span><strong class="gradient-text" id="dash-total-jobs">0</strong></article>
+                    <article class="stat-card glass-panel hover-lift"><span>Resumes</span><strong class="gradient-text" id="dash-total-resumes">0</strong></article>
+                    <article class="stat-card glass-panel hover-lift"><span>Analyzed</span><strong class="gradient-text" id="dash-analyzed">0</strong></article>
+                    <article class="stat-card glass-panel hover-lift"><span>Avg score</span><strong class="gradient-text" id="dash-avg-score">0</strong></article>
                 </div>
 
                 <div class="two-column">
-                    <section class="panel">
+                    <section class="panel glass-panel">
                         <div class="panel-header"><h3>Recent jobs</h3></div>
                         <div class="list" id="dash-recent-jobs"></div>
                     </section>
-                    <section class="panel">
+                    <section class="panel glass-panel">
                         <div class="panel-header"><h3>Audit trail</h3></div>
                         <div class="list" id="dash-activity"></div>
                     </section>
                 </div>
             </section>
 
-            <section class="view" id="view-jobs">
+            <section class="view fade-in" id="view-jobs">
                 <div class="view-header">
                     <div>
                         <p class="eyebrow">Pipeline</p>
                         <h2>Jobs</h2>
                     </div>
-                    <button class="btn btn-primary" data-action="new-job" type="button">New job</button>
+                    <button class="btn btn-primary glowing-btn" data-action="new-job" type="button">New job</button>
                 </div>
                 <div class="jobs-grid" id="jobs-grid"></div>
             </section>
 
-            <section class="view" id="view-job-form">
+            <section class="view fade-in" id="view-job-form">
                 <div class="view-header">
                     <div>
                         <p class="eyebrow">Role setup</p>
                         <h2 id="job-form-heading">Create job</h2>
                     </div>
                 </div>
-                <form class="form-panel" id="job-form">
-                    <label class="span-2">Job title<input id="job-title" required></label>
-                    <label class="span-2">Job description<textarea id="job-description" rows="7" required></textarea></label>
-                    <label class="span-2">Required skills<input id="required-skills" placeholder="python, react, sql, aws"></label>
-                    <label>Minimum experience<input id="min-experience" type="number" min="0" max="50" value="2"></label>
+                <form class="form-panel glass-panel" id="job-form">
+                    <label class="span-2">Job title<input class="glass-input" id="job-title" required></label>
+                    <label class="span-2">Job description<textarea class="glass-input" id="job-description" rows="7" required></textarea></label>
+                    <label class="span-2">Required skills<input class="glass-input" id="required-skills" placeholder="python, react, sql, aws"></label>
+                    <label>Minimum experience<input class="glass-input" id="min-experience" type="number" min="0" max="50" value="2"></label>
                     <label>Minimum education
-                        <select id="min-education">
+                        <select class="glass-input" id="min-education">
                             <option value="not specified">Not specified</option>
                             <option value="high school">High school</option>
                             <option value="associate">Associate</option>
@@ -165,25 +168,25 @@
                     </label>
                     <div class="form-actions span-2">
                         <button class="btn btn-secondary" data-action="cancel-job" type="button">Cancel</button>
-                        <button class="btn btn-primary" type="submit">Save job</button>
+                        <button class="btn btn-primary glowing-btn" type="submit">Save job</button>
                     </div>
                 </form>
             </section>
 
-            <section class="view" id="view-upload">
+            <section class="view fade-in" id="view-upload">
                 <div class="view-header">
                     <div>
                         <p class="eyebrow">Intake</p>
                         <h2>Upload resumes</h2>
                     </div>
                 </div>
-                <section class="panel">
+                <section class="panel glass-panel">
                     <label class="select-row">Job
-                        <select id="upload-job-select"></select>
+                        <select class="glass-input" id="upload-job-select"></select>
                     </label>
-                    <label class="upload-zone" id="upload-zone">
+                    <label class="upload-zone glass-panel hover-lift" id="upload-zone">
                         <input id="file-input" type="file" multiple accept=".pdf,.docx,.txt" hidden>
-                        <span class="upload-icon" aria-hidden="true">
+                        <span class="upload-icon glowing" aria-hidden="true">
                             <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
                         </span>
                         <strong>Drop PDF, DOCX, or TXT files</strong>
@@ -191,12 +194,12 @@
                     </label>
                     <div class="file-list" id="uploaded-files"></div>
                     <div class="form-actions">
-                        <button class="btn btn-primary" id="btn-analyze" type="button" disabled>Run analysis</button>
+                        <button class="btn btn-primary glowing-btn" id="btn-analyze" type="button" disabled>Run analysis</button>
                     </div>
                 </section>
             </section>
 
-            <section class="view" id="view-results">
+            <section class="view fade-in" id="view-results">
                 <div class="view-header">
                     <div>
                         <p class="eyebrow">Ranking</p>
@@ -208,12 +211,12 @@
                     </div>
                 </div>
 
-                <div class="results-toolbar">
+                <div class="results-toolbar glass-panel">
                     <label>Search
-                        <input id="result-search" type="search" placeholder="Name, skill, status">
+                        <input class="glass-input" id="result-search" type="search" placeholder="Name, skill, status">
                     </label>
                     <label>Sort
-                        <select id="sort-select">
+                        <select class="glass-input" id="sort-select">
                             <option value="score">Score</option>
                             <option value="experience">Experience</option>
                             <option value="uploaded">Newest</option>
@@ -237,7 +240,7 @@
                 <div class="candidates-list" id="candidates-list"></div>
             </section>
 
-            <section class="view" id="view-trust">
+            <section class="view fade-in" id="view-trust">
                 <div class="view-header">
                     <div>
                         <p class="eyebrow">Governance</p>
@@ -247,15 +250,15 @@
                 </div>
 
                 <div class="two-column">
-                    <section class="panel">
+                    <section class="panel glass-panel">
                         <div class="panel-header"><h3>Calibration history</h3></div>
                         <div class="list" id="trust-calibrations"></div>
                     </section>
-                    <section class="panel">
+                    <section class="panel glass-panel">
                         <div class="panel-header"><h3>Structured logs</h3></div>
                         <div class="log-search">
-                            <input id="log-request-id" placeholder="Request ID">
-                            <select id="log-level">
+                            <input class="glass-input" id="log-request-id" placeholder="Request ID">
+                            <select class="glass-input" id="log-level">
                                 <option value="">All levels</option>
                                 <option value="debug">Debug</option>
                                 <option value="info">Info</option>
@@ -271,8 +274,8 @@
     </div>
 
     <div class="modal-overlay" id="modal-overlay" hidden>
-        <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-            <header class="modal-header">
+        <section class="modal glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <header class="modal-header glass-panel">
                 <h3 id="modal-title">Candidate</h3>
                 <button class="icon-btn" id="modal-close" type="button" title="Close">
                     <svg viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
@@ -282,9 +285,9 @@
         </section>
     </div>
 
-    <div class="loading-overlay" id="loading-overlay" hidden>
+    <div class="loading-overlay glass-panel" id="loading-overlay" hidden>
         <div class="loader"></div>
-        <p id="loading-text">Working...</p>
+        <p id="loading-text" class="gradient-text">Working...</p>
     </div>
     <div class="toast-container" id="toast-container" aria-live="polite"></div>
     <script src="/static/app.js"></script>
