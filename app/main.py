@@ -168,7 +168,15 @@ def create_app(test_config=None):
         )
         return jsonify({"error": "Internal server error", "request_id": request_id_from_context()}), 500
 
-    @app.route("/", defaults={"path": ""})
+    @app.route("/")
+    def landing():
+        return render_template("landing.html")
+
+    @app.route("/app")
+    @app.route("/app/<path:path>")
+    def app_index(path=""):
+        return render_template("index.html")
+
     @app.route("/<path:path>")
     def catch_all(path):
         return render_template("index.html")
