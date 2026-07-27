@@ -2,6 +2,9 @@
 import math
 import re
 from collections import Counter
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.resume_parser import ResumeParser
 
@@ -208,6 +211,21 @@ class ResumeAnalyzer:
 
     @classmethod
     def analyze(cls, resume_text, job_description, required_skills_str="", min_exp=0, min_edu="bachelor"):
+        """Analyze a resume against a job description and return a detailed scoring breakdown.
+
+        Args:
+            resume_text: The full text content of the resume.
+            job_description: The job description to match against.
+            required_skills_str: Comma-separated required skills string.
+            min_exp: Minimum years of experience required.
+            min_edu: Minimum education level required.
+
+        Returns:
+            A dictionary containing overall score, category scores, status,
+            matched/missing skills, strengths, weaknesses, and evidence.
+        """
+        logger.info("Starting resume analysis (required_skills=%d chars, min_exp=%s, min_edu=%s)",
+                     len(required_skills_str or ""), min_exp, min_edu)
         resume_skills = set(cls.extract_skills(resume_text))
         required_skills = cls._required_skills(required_skills_str)
 
@@ -284,7 +302,7 @@ class ResumeAnalyzer:
         )
         evidence = cls.evidence_summary(resume_text, matched, missing, exp_years, education)
 
-        return {
+        result = {
             "overall_score": overall,
             "skill_score": round(skill_score, 1),
             "experience_score": round(experience_score, 1),
@@ -302,3 +320,6 @@ class ResumeAnalyzer:
             "evidence": evidence,
             "explanation": explanation,
         }
+        logger.info("Analysis complete: overall=%.1f status=%s matched=%d missing=%d",
+                     overall, status, len(matched), len(missing))
+        return result
