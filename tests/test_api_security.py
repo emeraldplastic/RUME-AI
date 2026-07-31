@@ -167,6 +167,21 @@ class RumeApiSecurityTest(unittest.TestCase):
         response = intruder.get(f"/api/jobs/{job_id}")
         self.assertEqual(response.status_code, 404)
 
+    def test_candidate_comparison_matrix(self):
+        self.register()
+        job_id = self.create_job()
+        text = "Jane Candidate\njane@example.com\nBachelor\n5 years python sql"
+        self.upload_resume(job_id, "jane.txt", text)
+        self.client.post(f"/api/jobs/{job_id}/analyze", headers=self.csrf_headers())
+
+        response = self.client.get(f"/api/jobs/{job_id}/compare")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["job_id"], job_id)
+        self.assertIn("comparison_matrix", data)
+        self.assertEqual(len(data["comparison_matrix"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -1242,3 +1242,49 @@ def global_search():
         "results": results,
         "total": len(results["jobs"]) + len(results["candidates"]),
     })
+
+
+@api.route("/jobs/<int:job_id>/compare", methods=["GET"])
+@require_auth
+def compare_candidates(job_id):
+    security = SecurityManager
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    limit = positive_int(request.args.get("limit"), default=5, maximum=10)
+    resumes = (
+        Resume.query.filter_by(job_id=job.id)
+        .join(AnalysisResult)
+        .order_by(AnalysisResult.overall_score.desc())
+        .limit(limit)
+        .all()
+    )
+
+    matrix = []
+    for resume in resumes:
+        ar = resume.analysis
+        matrix.append({
+            "resume_id": resume.id,
+            "candidate_name": security.decrypt(resume.candidate_name_encrypted),
+            "years_experience": resume.years_experience,
+            "education_level": resume.education_level,
+            "overall_score": ar.overall_score if ar else 0,
+            "skill_score": ar.skill_score if ar else 0,
+            "experience_score": ar.experience_score if ar else 0,
+            "education_score": ar.education_score if ar else 0,
+            "status": ar.status if ar else "unprocessed",
+            "matched_skills": (ar.matched_skills or "").split(",") if ar and ar.matched_skills else [],
+            "missing_skills": (ar.missing_skills or "").split(",") if ar and ar.missing_skills else [],
+        })
+
+    return jsonify({
+        "job_id": job.id,
+        "job_title": job.title,
+        "required_skills": job.required_skills,
+        "min_experience": job.min_experience,
+        "min_education": job.min_education,
+        "compared_count": len(matrix),
+        "comparison_matrix": matrix,
+    })
+
