@@ -155,6 +155,7 @@ Navigate to `http://localhost:5000` and create your account.
 - `POST /api/jobs/<id>/upload` - Upload resumes
 - `POST /api/jobs/<id>/analyze` - Analyze uploaded resumes
 - `GET /api/jobs/<id>/results` - Get ranked candidates with filtering
+- `GET /api/jobs/<id>/summary` - Get per-job analytics summary (scores, status, skills)
 - `GET /api/jobs/<id>/skill-gap-analysis` - Analyze skill gaps
 - `GET /api/jobs/<id>/export` - Export candidates (CSV/JSON)
 
@@ -346,6 +347,7 @@ tests/              API and privacy regression tests
 - `POST /api/jobs/<id>/upload` - Upload resumes
 - `POST /api/jobs/<id>/analyze` - Analyze resumes
 - `GET /api/jobs/<id>/results` - Get results with pagination and filtering
+- `GET /api/jobs/<id>/summary` - Get per-job analytics summary
 - `DELETE /api/jobs/<id>/candidates/<resume_id>` - Delete candidate
 - `POST /api/jobs/<id>/candidates/bulk` - Bulk operations
 - `DELETE /api/jobs/<id>/candidates/bulk` - Bulk delete

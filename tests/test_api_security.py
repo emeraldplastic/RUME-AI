@@ -167,6 +167,34 @@ class RumeApiSecurityTest(unittest.TestCase):
         response = intruder.get(f"/api/jobs/{job_id}")
         self.assertEqual(response.status_code, 404)
 
+    def test_job_summary_endpoint(self):
+        self.register()
+        job_id = self.create_job()
+        text = "Jane Candidate\njane@example.com\nBachelor\n5 years python sql"
+        self.upload_resume(job_id, "jane.txt", text)
+        self.client.post(f"/api/jobs/{job_id}/analyze", headers=self.csrf_headers())
+
+        response = self.client.get(f"/api/jobs/{job_id}/summary")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["job_id"], job_id)
+        self.assertEqual(data["total_candidates"], 1)
+        self.assertEqual(data["analyzed"], 1)
+        self.assertGreaterEqual(data["average_score"], 0)
+        self.assertIn("status_breakdown", data)
+        self.assertIn("score_distribution", data)
+        self.assertIn("top_skills", data)
+
+    def test_job_summary_requires_auth(self):
+        self.register()
+        job_id = self.create_job()
+        response = self.client.get(f"/api/jobs/{job_id}/summary")
+        self.assertEqual(response.status_code, 200)
+
+        anonymous = self.app.test_client()
+        response = anonymous.get(f"/api/jobs/{job_id}/summary")
+        self.assertEqual(response.status_code, 401)
+
     def test_candidate_comparison_matrix(self):
         self.register()
         job_id = self.create_job()

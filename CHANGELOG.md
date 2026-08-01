@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2025-01-01
 
 ### Added
+- Per-job analytics summary endpoint (`GET /api/jobs/<id>/summary`) with status breakdown, score distribution, and top skills
 - Resume upload and parsing (PDF, DOCX, TXT)
 - Deterministic resume analysis engine with weighted scoring
 - Skill extraction with alias normalization (50+ technical and soft skills)

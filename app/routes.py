@@ -696,6 +696,61 @@ def results(job_id):
     })
 
 
+@api.route("/jobs/<int:job_id>/summary", methods=["GET"])
+@require_auth
+def job_summary(job_id):
+    """Per-job analytics summary for a single job."""
+    security = SecurityManager
+    job = owned_job(job_id)
+    if not job:
+        return error("Job not found", 404)
+
+    resumes = Resume.query.filter_by(job_id=job.id).all()
+    analyzed_results = [resume for resume in resumes if resume.analysis]
+
+    status_breakdown = {}
+    for resume in analyzed_results:
+        status_breakdown[resume.analysis.status] = status_breakdown.get(resume.analysis.status, 0) + 1
+
+    score_distribution = {"0-25": 0, "26-50": 0, "51-75": 0, "76-100": 0}
+    scores = []
+    for resume in analyzed_results:
+        score = resume.analysis.overall_score
+        scores.append(score)
+        if score <= 25:
+            score_distribution["0-25"] += 1
+        elif score <= 50:
+            score_distribution["26-50"] += 1
+        elif score <= 75:
+            score_distribution["51-75"] += 1
+        else:
+            score_distribution["76-100"] += 1
+
+    skill_frequency = {}
+    for resume in resumes:
+        for skill in (resume.extracted_skills or "").split(","):
+            if skill.strip():
+                skill_frequency[skill.strip()] = skill_frequency.get(skill.strip(), 0) + 1
+
+    qualified = sum(status_breakdown.get(status, 0) for status in ("highly_qualified", "qualified"))
+
+    return jsonify(
+        {
+            "job_id": job.id,
+            "job_title": job.title,
+            "total_candidates": len(resumes),
+            "analyzed": len(analyzed_results),
+            "qualified": qualified,
+            "average_score": round(sum(scores) / len(scores), 1) if scores else 0,
+            "highest_score": round(max(scores), 1) if scores else 0,
+            "lowest_score": round(min(scores), 1) if scores else 0,
+            "status_breakdown": status_breakdown,
+            "score_distribution": score_distribution,
+            "top_skills": dict(sorted(skill_frequency.items(), key=lambda x: x[1], reverse=True)[:20]),
+        }
+    )
+
+
 @api.route("/jobs/<int:job_id>/candidates/<int:resume_id>", methods=["DELETE"])
 @require_auth
 def delete_candidate(job_id, resume_id):
