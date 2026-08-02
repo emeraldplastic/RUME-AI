@@ -348,6 +348,7 @@ tests/              API and privacy regression tests
 - `POST /api/jobs/<id>/analyze` - Analyze resumes
 - `GET /api/jobs/<id>/results` - Get results with pagination and filtering
 - `GET /api/jobs/<id>/summary` - Get per-job analytics summary
+- `GET /api/jobs/<id>/candidates/<resume_id>` - Get single candidate detail (analysis, comments, tags, decisions)
 - `DELETE /api/jobs/<id>/candidates/<resume_id>` - Delete candidate
 - `POST /api/jobs/<id>/candidates/bulk` - Bulk operations
 - `DELETE /api/jobs/<id>/candidates/bulk` - Bulk delete

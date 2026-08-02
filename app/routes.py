@@ -751,9 +751,10 @@ def job_summary(job_id):
     )
 
 
-@api.route("/jobs/<int:job_id>/candidates/<int:resume_id>", methods=["DELETE"])
+@api.route("/jobs/<int:job_id>/candidates/<int:resume_id>", methods=["GET", "DELETE"])
 @require_auth
-def delete_candidate(job_id, resume_id):
+def candidate_detail(job_id, resume_id):
+    security = SecurityManager
     job = owned_job(job_id)
     if not job:
         return error("Job not found", 404)
@@ -761,6 +762,14 @@ def delete_candidate(job_id, resume_id):
     resume = Resume.query.filter_by(id=resume_id, job_id=job.id).first()
     if not resume:
         return error("Candidate not found", 404)
+
+    if request.method == "GET":
+        return jsonify({
+            "candidate": resume.to_dict(security, blind=bool_arg("blind")),
+            "comments": [comment.to_dict(security) for comment in resume.comments],
+            "tags": [tag.to_dict() for tag in resume.tags],
+            "decisions": [decision.to_dict(security) for decision in resume.decisions],
+        })
 
     log_action("delete_candidate", "resume", resume.id, f"Removed candidate from job {job.id}")
     db.session.delete(resume)
