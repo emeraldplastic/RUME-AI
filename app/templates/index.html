@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="RUME AI is a secure resume screening workspace for ranking candidates against job requirements.">
-    <title>RUME AI - Secure Resume Screening</title>
+    <title>RUME AI - Secure Resume Screening & Candidate Ranking</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -24,7 +24,7 @@
                 </div>
                 <div>
                     <h1 class="gradient-text">RUME AI</h1>
-                    <p>Private resume intelligence</p>
+                    <p>Private candidate intelligence</p>
                 </div>
             </div>
 
@@ -36,11 +36,16 @@
             <form class="auth-form active" id="login-form">
                 <label>
                     Username
-                    <input class="glass-input" id="login-username" name="username" autocomplete="username" required>
+                    <input class="glass-input" id="login-username" name="username" autocomplete="username" required placeholder="Enter your username">
                 </label>
                 <label>
                     Password
-                    <input class="glass-input" id="login-password" name="password" type="password" autocomplete="current-password" required>
+                    <div class="password-input-wrapper">
+                        <input class="glass-input" id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••">
+                        <button type="button" class="password-toggle-btn" data-target="login-password" title="Toggle password visibility">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
                 </label>
                 <button class="btn btn-primary btn-full glowing-btn" type="submit">Sign in</button>
             </form>
@@ -48,19 +53,24 @@
             <form class="auth-form" id="register-form">
                 <label>
                     Username
-                    <input class="glass-input" id="reg-username" name="username" autocomplete="username" minlength="3" required>
+                    <input class="glass-input" id="reg-username" name="username" autocomplete="username" minlength="3" required placeholder="Choose username">
                 </label>
                 <label>
                     Email
-                    <input class="glass-input" id="reg-email" name="email" type="email" autocomplete="email" required>
+                    <input class="glass-input" id="reg-email" name="email" type="email" autocomplete="email" required placeholder="name@company.com">
                 </label>
                 <label>
                     Display name
-                    <input class="glass-input" id="reg-display" name="display_name" autocomplete="name">
+                    <input class="glass-input" id="reg-display" name="display_name" autocomplete="name" placeholder="John Doe">
                 </label>
                 <label>
                     Password
-                    <input class="glass-input" id="reg-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                    <div class="password-input-wrapper">
+                        <input class="glass-input" id="reg-password" name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="At least 8 characters">
+                        <button type="button" class="password-toggle-btn" data-target="reg-password" title="Toggle password visibility">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
                 </label>
                 <button class="btn btn-primary btn-full glowing-btn" type="submit">Create account</button>
             </form>
@@ -76,12 +86,30 @@
                 <span class="gradient-text">RUME AI</span>
             </div>
             <nav class="sidebar-nav" aria-label="Primary">
-                <button class="nav-item active" data-view="dashboard" type="button">Dashboard</button>
-                <button class="nav-item" data-view="jobs" type="button">Jobs</button>
-                <button class="nav-item" data-view="job-form" type="button">New job</button>
-                <button class="nav-item" data-view="upload" type="button">Upload</button>
-                <button class="nav-item" data-view="results" type="button">Results</button>
-                <button class="nav-item" data-view="trust" type="button">Trust</button>
+                <button class="nav-item active" data-view="dashboard" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    Dashboard
+                </button>
+                <button class="nav-item" data-view="jobs" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                    Jobs
+                </button>
+                <button class="nav-item" data-view="job-form" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    New job
+                </button>
+                <button class="nav-item" data-view="upload" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+                    Upload
+                </button>
+                <button class="nav-item" data-view="results" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    Results
+                </button>
+                <button class="nav-item" data-view="trust" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Trust
+                </button>
             </nav>
             <div class="sidebar-footer">
                 <div class="user-chip">
@@ -111,14 +139,38 @@
                         <p class="eyebrow">Overview</p>
                         <h2 id="greeting">Dashboard</h2>
                     </div>
-                    <button class="btn btn-primary glowing-btn" data-action="new-job" type="button">New job</button>
+                    <button class="btn btn-primary glowing-btn" data-action="new-job" type="button">+ New job</button>
                 </div>
 
                 <div class="stats-grid">
-                    <article class="stat-card glass-panel hover-lift"><span>Total jobs</span><strong class="gradient-text" id="dash-total-jobs">0</strong></article>
-                    <article class="stat-card glass-panel hover-lift"><span>Resumes</span><strong class="gradient-text" id="dash-total-resumes">0</strong></article>
-                    <article class="stat-card glass-panel hover-lift"><span>Analyzed</span><strong class="gradient-text" id="dash-analyzed">0</strong></article>
-                    <article class="stat-card glass-panel hover-lift"><span>Avg score</span><strong class="gradient-text" id="dash-avg-score">0</strong></article>
+                    <article class="stat-card glass-panel hover-lift">
+                        <div class="stat-card-header">
+                            <span>Total jobs</span>
+                            <div class="stat-icon-badge">💼</div>
+                        </div>
+                        <strong class="gradient-text" id="dash-total-jobs">0</strong>
+                    </article>
+                    <article class="stat-card glass-panel hover-lift">
+                        <div class="stat-card-header">
+                            <span>Resumes</span>
+                            <div class="stat-icon-badge">📄</div>
+                        </div>
+                        <strong class="gradient-text" id="dash-total-resumes">0</strong>
+                    </article>
+                    <article class="stat-card glass-panel hover-lift">
+                        <div class="stat-card-header">
+                            <span>Analyzed</span>
+                            <div class="stat-icon-badge">⚡</div>
+                        </div>
+                        <strong class="gradient-text" id="dash-analyzed">0</strong>
+                    </article>
+                    <article class="stat-card glass-panel hover-lift">
+                        <div class="stat-card-header">
+                            <span>Avg score</span>
+                            <div class="stat-icon-badge">🎯</div>
+                        </div>
+                        <strong class="gradient-text" id="dash-avg-score">0%</strong>
+                    </article>
                 </div>
 
                 <div class="two-column">
@@ -139,7 +191,7 @@
                         <p class="eyebrow">Pipeline</p>
                         <h2>Jobs</h2>
                     </div>
-                    <button class="btn btn-primary glowing-btn" data-action="new-job" type="button">New job</button>
+                    <button class="btn btn-primary glowing-btn" data-action="new-job" type="button">+ New job</button>
                 </div>
                 <div class="jobs-grid" id="jobs-grid"></div>
             </section>
@@ -152,8 +204,8 @@
                     </div>
                 </div>
                 <form class="form-panel glass-panel" id="job-form">
-                    <label class="span-2">Job title<input class="glass-input" id="job-title" required></label>
-                    <label class="span-2">Job description<textarea class="glass-input" id="job-description" rows="7" required></textarea></label>
+                    <label class="span-2">Job title<input class="glass-input" id="job-title" required placeholder="e.g. Senior Software Engineer"></label>
+                    <label class="span-2">Job description<textarea class="glass-input" id="job-description" rows="7" required placeholder="Describe responsibilities, stack, and candidate fit..."></textarea></label>
                     <label class="span-2">Required skills<input class="glass-input" id="required-skills" placeholder="python, react, sql, aws"></label>
                     <label>Minimum experience<input class="glass-input" id="min-experience" type="number" min="0" max="50" value="2"></label>
                     <label>Minimum education
@@ -181,7 +233,7 @@
                     </div>
                 </div>
                 <section class="panel glass-panel">
-                    <label class="select-row">Job
+                    <label class="select-row">Target Job Position
                         <select class="glass-input" id="upload-job-select"></select>
                     </label>
                     <label class="upload-zone glass-panel hover-lift" id="upload-zone">
@@ -189,12 +241,12 @@
                         <span class="upload-icon glowing" aria-hidden="true">
                             <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
                         </span>
-                        <strong>Drop PDF, DOCX, or TXT files</strong>
-                        <small>Resume text is encrypted in the database. Original files are not stored.</small>
+                        <strong>Drop PDF, DOCX, or TXT files here, or click to browse</strong>
+                        <small>Resume text is encrypted with Fernet AES-256 in the database. Original files are not stored.</small>
                     </label>
                     <div class="file-list" id="uploaded-files"></div>
                     <div class="form-actions">
-                        <button class="btn btn-primary glowing-btn" id="btn-analyze" type="button" disabled>Run analysis</button>
+                        <button class="btn btn-primary glowing-btn" id="btn-analyze" type="button" disabled>⚡ Run AI analysis</button>
                     </div>
                 </section>
             </section>
@@ -206,14 +258,15 @@
                         <h2 id="results-title">Results</h2>
                     </div>
                     <div class="header-actions">
-                        <button class="btn btn-secondary" id="btn-audit-pack" type="button">Audit pack</button>
-                        <button class="btn btn-secondary" id="btn-export" type="button">Export CSV</button>
+                        <button class="btn btn-secondary" id="btn-skill-gap" type="button">📊 Skill Gap Analysis</button>
+                        <button class="btn btn-secondary" id="btn-audit-pack" type="button">🛡️ Audit pack</button>
+                        <button class="btn btn-secondary" id="btn-export" type="button">📥 Export CSV</button>
                     </div>
                 </div>
 
                 <div class="results-toolbar glass-panel">
                     <label>Search
-                        <input class="glass-input" id="result-search" type="search" placeholder="Name, skill, status">
+                        <input class="glass-input" id="result-search" type="search" placeholder="Search candidate name, skill, status...">
                     </label>
                     <label>Sort
                         <select class="glass-input" id="sort-select">
@@ -273,10 +326,11 @@
         </main>
     </div>
 
+    <!-- Candidate Detail Modal -->
     <div class="modal-overlay" id="modal-overlay" hidden>
         <section class="modal glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
             <header class="modal-header glass-panel">
-                <h3 id="modal-title">Candidate</h3>
+                <h3 id="modal-title">Candidate Details</h3>
                 <button class="icon-btn" id="modal-close" type="button" title="Close">
                     <svg viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
                 </button>
@@ -285,9 +339,24 @@
         </section>
     </div>
 
+    <!-- Skill Gap Analysis Modal -->
+    <div class="modal-overlay" id="modal-skill-gap" hidden>
+        <section class="modal glass-panel" role="dialog" aria-modal="true" aria-labelledby="skill-gap-title">
+            <header class="modal-header glass-panel">
+                <h3 id="skill-gap-title">📊 Pipeline Skill Gap Analysis</h3>
+                <button class="icon-btn" id="skill-gap-close" type="button" title="Close">
+                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                </button>
+            </header>
+            <div class="modal-body" id="skill-gap-body">
+                <div class="loader"></div>
+            </div>
+        </section>
+    </div>
+
     <div class="loading-overlay glass-panel" id="loading-overlay" hidden>
         <div class="loader"></div>
-        <p id="loading-text" class="gradient-text">Working...</p>
+        <p id="loading-text" class="gradient-text">Analyzing candidates with AI...</p>
     </div>
     <div class="toast-container" id="toast-container" aria-live="polite"></div>
     <script src="/static/app.js"></script>
