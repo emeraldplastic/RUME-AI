@@ -132,7 +132,9 @@ label { display: flex; flex-direction: column; gap: 8px; color: var(--text-muted
 textarea.glass-input { resize: vertical; min-height: 120px; }
 select.glass-input option { background: var(--bg-base); color: var(--text-main); }
 
-/* Password Input Wrapper */
+.field-hint { font-size: 0.75rem; color: var(--text-faint); font-weight: 500; margin-top: -4px; }
+
+/* Password Input Wrapper & Tools */
 .password-input-wrapper { position: relative; width: 100%; }
 .password-input-wrapper .glass-input { padding-right: 48px; }
 .password-toggle-btn {
@@ -140,6 +142,27 @@ select.glass-input option { background: var(--bg-base); color: var(--text-main);
     color: var(--text-muted); padding: 4px; border-radius: 6px; transition: color 0.3s;
 }
 .password-toggle-btn:hover { color: var(--text-main); }
+
+.password-tools {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px;
+}
+
+.btn-suggest {
+    background: rgba(0, 242, 254, 0.08); border: 1px solid rgba(0, 242, 254, 0.25);
+    color: var(--accent-cyan); padding: 6px 12px; border-radius: 100px;
+    font-size: 0.78rem; font-weight: 700; transition: all 0.3s ease;
+}
+.btn-suggest:hover {
+    background: rgba(0, 242, 254, 0.18); border-color: var(--accent-cyan);
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.3); transform: translateY(-1px);
+}
+
+.password-badge {
+    padding: 3px 10px; border-radius: 100px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+}
+.password-badge.strong {
+    background: rgba(16, 185, 129, 0.15); color: var(--status-green); border: 1px solid rgba(16, 185, 129, 0.3);
+}
 
 /* Buttons */
 .btn {

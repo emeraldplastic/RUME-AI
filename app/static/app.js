@@ -36,6 +36,46 @@ const App = {
                 }
             });
         });
+
+        const suggestBtn = document.getElementById("btn-suggest-password");
+        if (suggestBtn) {
+            suggestBtn.addEventListener("click", () => {
+                const strongPwd = this.generateStrongPassword(16);
+                const pwdInput = document.getElementById("reg-password");
+                const badge = document.getElementById("password-badge");
+                if (pwdInput) {
+                    pwdInput.value = strongPwd;
+                    pwdInput.type = "text";
+                    if (badge) {
+                        badge.textContent = "Strong Password Generated";
+                        badge.className = "password-badge strong";
+                        badge.hidden = false;
+                    }
+                    this.toast("✨ Strong password generated & applied!", "success");
+                }
+            });
+        }
+    },
+
+    generateStrongPassword(length = 16) {
+        const uppers = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        const lowers = "abcdefghijkmnopqrstuvwxyz";
+        const numbers = "23456789";
+        const symbols = "!@#$%^&*()+=~?";
+        const all = uppers + lowers + numbers + symbols;
+        
+        let pwd = [
+            uppers[Math.floor(Math.random() * uppers.length)],
+            lowers[Math.floor(Math.random() * lowers.length)],
+            numbers[Math.floor(Math.random() * numbers.length)],
+            symbols[Math.floor(Math.random() * symbols.length)]
+        ];
+        
+        for (let i = 4; i < length; i++) {
+            pwd.push(all[Math.floor(Math.random() * all.length)]);
+        }
+        
+        return pwd.sort(() => Math.random() - 0.5).join("");
     },
 
     bindAuth() {

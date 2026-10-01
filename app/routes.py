@@ -113,8 +113,8 @@ def register():
     display_name = SecurityManager.sanitize(data.get("display_name"), 100)
     password = data.get("password") or ""
 
-    if len(username) < 3 or not re.fullmatch(r"[a-z0-9_.-]{3,80}", username):
-        return error("Username must be 3-80 characters and use letters, numbers, dots, dashes, or underscores")
+    if len(username) < 3 or not re.fullmatch(r"[a-z0-9!@#$%^&*()+=~?]{3,80}", username):
+        return error("Username must be 3-80 characters and use letters, numbers, and punctuation (no dots, underscores, or hyphens)")
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         return error("A valid email is required")
     if len(password) < 8:

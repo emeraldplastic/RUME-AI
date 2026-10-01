@@ -210,6 +210,27 @@ class RumeApiSecurityTest(unittest.TestCase):
         self.assertEqual(len(data["comparison_matrix"]), 1)
 
 
+    def test_username_validation_disallows_dots_underscores_hyphens(self):
+        # Dots, underscores, and hyphens must be rejected
+        for bad_username in ["user.name", "user_name", "user-name"]:
+            res = self.client.post("/api/auth/register", json={
+                "username": bad_username,
+                "email": f"{bad_username.replace('.', '').replace('_', '').replace('-', '')}@example.com",
+                "password": "password123"
+            })
+            self.assertEqual(res.status_code, 400)
+            self.assertIn("no dots, underscores, or hyphens", res.get_json()["error"])
+
+        # Valid combination of letters, numbers, and allowed punctuation
+        valid_res = self.client.post("/api/auth/register", json={
+            "username": "user123!",
+            "email": "validuser123@example.com",
+            "password": "password123"
+        })
+        self.assertEqual(valid_res.status_code, 201)
+
+
 if __name__ == "__main__":
     unittest.main()
+
 
