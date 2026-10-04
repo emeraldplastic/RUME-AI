@@ -36,4 +36,5 @@ jobs:
       - name: Run tests
         env:
           TESTING: "true"
-        run: pytest tests/ -v --tb=short
+          PYTHONPATH: .
+        run: python -m pytest tests/ -v --tb=short
