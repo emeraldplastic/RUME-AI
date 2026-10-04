@@ -117,7 +117,7 @@ class DataValidators:
         if candidate.get('linkedin'):
             linkedin_result = DataValidators.validate_url(candidate['linkedin'])
             errors.extend(linkedin_result.errors)
-            warnings.extend(linkin_result.warnings)
+            warnings.extend(linkedin_result.warnings)
         
         if candidate.get('experience_years'):
             exp_result = DataValidators.validate_years_experience(candidate['experience_years'])
